@@ -33,15 +33,24 @@ function Notice({ notice }) {
 
 function Landing({ onAuthenticated, initialNotice = null }) {
   const [mode, setMode] = useState("login");
+  const [loginAs, setLoginAs] = useState("user");
+  const [residencies, setResidencies] = useState([]);
   const [notice, setNotice] = useState(initialNotice ? { message: initialNotice, isError: true } : null);
   const [submitting, setSubmitting] = useState(false);
   const registering = mode === "register";
+
+  useEffect(() => {
+    api("/auth/residencies", {}, null)
+      .then((result) => setResidencies(result.residencies))
+      .catch((error) => setNotice({ message: error.message, isError: true }));
+  }, []);
 
   async function submitAuth(event) {
     event.preventDefault();
     setSubmitting(true);
     setNotice(null);
     const data = Object.fromEntries(new FormData(event.currentTarget));
+    if (!registering) data.loginAs = loginAs;
     try {
       const result = await api(`/auth/${registering ? "register" : "login"}`, {
         method: "POST",
@@ -58,6 +67,12 @@ function Landing({ onAuthenticated, initialNotice = null }) {
 
   function changeMode(nextMode) {
     setMode(nextMode);
+    setNotice(null);
+  }
+
+  function changeLoginAs(role) {
+    setMode("login");
+    setLoginAs(role);
     setNotice(null);
   }
 
@@ -93,18 +108,21 @@ function Landing({ onAuthenticated, initialNotice = null }) {
       <section className="account-section" id="account">
         <div><div className="eyebrow">YOUR COMMUNITY, CONNECTED</div><h2>Let's get you started.</h2><p>Create a resident account or sign in to see your dashboard.</p></div>
         <div className="account-card">
-          <div className="tabs">
-            <button className={`tab ${!registering ? "active" : ""}`} type="button" onClick={() => changeMode("login")}>Sign in</button>
-            <button className={`tab ${registering ? "active" : ""}`} type="button" onClick={() => changeMode("register")}>Create account</button>
+          <div className="tabs role-tabs">
+            <button className={`tab ${!registering && loginAs === "user" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("user")}>Resident</button>
+            <button className={`tab ${!registering && loginAs === "admin" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("admin")}>Admin</button>
+            <button className={`tab ${!registering && loginAs === "superadmin" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("superadmin")}>Superadmin</button>
+            <button className={`tab ${registering ? "active" : ""}`} type="button" onClick={() => changeMode("register")}>Register</button>
           </div>
           <Notice notice={notice} />
           <form className="form-grid" onSubmit={submitAuth}>
             {registering && <label>Full name<input name="name" autoComplete="name" required maxLength="80" placeholder="Your name" /></label>}
             <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></label>
             {registering && <label>Mobile number<input name="phone" type="tel" autoComplete="tel" required placeholder="+15551234567" /><small>Use international format, including the country code.</small></label>}
+            {registering && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select your residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select>{residencies.length === 0 && <small>There are no active residencies yet. Contact the system administrator.</small>}</label>}
             <label>Password<input name="password" type="password" autoComplete={registering ? "new-password" : "current-password"} required minLength="8" placeholder="At least 8 characters" /></label>
-            <button className="button button-dark button-full" type="submit" disabled={submitting}>{submitting ? "Please wait..." : registering ? "Create resident account" : "Sign in"} <span aria-hidden="true">↗</span></button>
-            <p className="form-footnote">{registering ? "Resident accounts are created with resident access." : "Your dashboard is tailored to your account role."}</p>
+            <button className="button button-dark button-full" type="submit" disabled={submitting || (registering && residencies.length === 0)}>{submitting ? "Please wait..." : registering ? "Create resident account" : `Sign in as ${loginAs === "user" ? "resident" : loginAs}`} <span aria-hidden="true">↗</span></button>
+            <p className="form-footnote">{registering ? "Resident accounts are assigned to one residency." : `This sign-in is for ${loginAs === "user" ? "residents" : `${loginAs}s`} only.`}</p>
           </form>
         </div>
       </section>
@@ -127,14 +145,30 @@ function ScheduleCard({ schedule }) {
   );
 }
 
-function ScheduleForm({ onSubmit }) {
+function ScheduleForm({ onSubmit, residencies = [], admin = false }) {
   return (
     <form className="inline-form" onSubmit={onSubmit}>
+      {!admin && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
       <label>Collection area<input name="area" required maxLength="100" placeholder="e.g. North District" /></label>
       <label>Collection date<input name="date" type="date" required /></label>
       <label>Waste type<select name="wasteType" required><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
       <label>Notes (optional)<input name="notes" maxLength="300" placeholder="Collection details" /></label>
       <button className="button button-dark" type="submit">Publish schedule ↗</button>
+    </form>
+  );
+}
+
+function AccountForm({ onSubmit, admin, residencies }) {
+  return (
+    <form className="form-grid management-form" onSubmit={onSubmit}>
+      {admin && <input type="hidden" name="role" value="user" />}
+      <label>Full name<input name="name" required minLength="2" maxLength="80" /></label>
+      <label>Email address<input name="email" type="email" required maxLength="254" /></label>
+      <label>Phone number<input name="phone" type="tel" required placeholder="+15551234567" /><small>Include country code.</small></label>
+      <label>Temporary password<input name="password" type="password" required minLength="8" maxLength="72" /></label>
+      {!admin && <label>Account type<select name="role"><option value="admin">Residency admin</option><option value="user">Resident</option></select></label>}
+      {!admin && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
+      <button className="button button-dark" type="submit">Create {admin ? "resident" : "account"} ↗</button>
     </form>
   );
 }
@@ -154,31 +188,42 @@ function RequestCard({ request, onReview }) {
 function Dashboard({ user, token, onLogout }) {
   const [schedules, setSchedules] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [residencies, setResidencies] = useState([]);
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const admin = user.role === "admin";
+  const superadmin = user.role === "superadmin";
 
   async function refreshDashboard() {
-    const [scheduleResult, requestResult] = await Promise.all([
+    const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
       api("/schedules", {}, token),
-      admin ? api("/requests", {}, token) : Promise.resolve({ requests: [] })
+      admin || superadmin ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+      admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
+      superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
     ]);
     setSchedules(scheduleResult.schedules);
     setRequests(requestResult.requests);
+    setUsers(userResult.users);
+    setResidencies(residencyResult.residencies);
   }
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const [scheduleResult, requestResult] = await Promise.all([
+        const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
           api("/schedules", {}, token),
-          admin ? api("/requests", {}, token) : Promise.resolve({ requests: [] })
+          admin || superadmin ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+          admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
+          superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
         ]);
         if (active) {
           setSchedules(scheduleResult.schedules);
           setRequests(requestResult.requests);
+          setUsers(userResult.users);
+          setResidencies(residencyResult.residencies);
         }
       } catch (error) {
         if (active) setNotice({ message: error.message, isError: true });
@@ -188,7 +233,7 @@ function Dashboard({ user, token, onLogout }) {
     }
     load();
     return () => { active = false; };
-  }, [admin, token]);
+  }, [admin, superadmin, token]);
 
   async function submitSchedule(event) {
     event.preventDefault();
@@ -236,6 +281,66 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
+  async function createAccount(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setNotice(null);
+    const form = event.currentTarget;
+    try {
+      await api("/users", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) }, token);
+      await refreshDashboard();
+      setNotice({ message: "Account created successfully." });
+      form.reset();
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function createResidency(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setNotice(null);
+    const form = event.currentTarget;
+    try {
+      await api("/residencies", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) }, token);
+      await refreshDashboard();
+      setNotice({ message: "Residency created." });
+      form.reset();
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function updateAccount(id, residencyId, role) {
+    try {
+      await api(`/users/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ residencyId, role })
+      }, token);
+      await refreshDashboard();
+      setNotice({ message: "Account residency updated." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
+  async function toggleResidency(residency) {
+    try {
+      await api(`/residencies/${encodeURIComponent(residency._id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: !residency.active })
+      }, token);
+      await refreshDashboard();
+      setNotice({ message: `${residency.name} ${residency.active ? "deactivated" : "activated"}.` });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
   async function reviewRequest(id) {
     setNotice(null);
     try {
@@ -256,18 +361,18 @@ function Dashboard({ user, token, onLogout }) {
 
   return (
     <main className="dashboard-shell">
-      <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
-      <section className="dashboard-heading"><div><div className="eyebrow">{admin ? "COMMUNITY ADMINISTRATION" : "YOUR NEIGHBORHOOD"}</div><h1>{admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{admin ? "Keep collection plans moving and support your residents." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{admin ? "✳" : "✦"}</div></section>
+      <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{superadmin ? "SUPERADMIN" : admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
+      <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
       <section className="dashboard-grid">
         <div className="panel schedule-panel">
           <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{admin ? "Manage schedules" : "Upcoming collections"}</h2></div><span className="count-badge">{schedules.length}</span></div>
-          {admin && <ScheduleForm onSubmit={submitSchedule} />}
+          {(admin || superadmin) && <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin={admin} />}
           <div className="schedule-list">
             {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
           </div>
         </div>
-        {admin ? (
+        {admin || superadmin ? (
           <div className="panel requests-panel">
             <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{requests.filter((request) => request.status === "pending").length} open</span></div>
             <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
@@ -284,6 +389,21 @@ function Dashboard({ user, token, onLogout }) {
           </div>
         )}
       </section>
+      {(admin || superadmin) && <section className="management-grid">
+        {superadmin && <div className="panel">
+          <div className="panel-heading"><div><div className="eyebrow">SYSTEM SETUP</div><h2>Residencies</h2></div><span className="count-badge">{residencies.length}</span></div>
+          <form className="inline-form single-column" onSubmit={createResidency}>
+            <label>Residency name<input name="name" required minLength="2" maxLength="100" placeholder="e.g. North District" /></label>
+            <button className="button button-dark" type="submit" disabled={submitting}>Create residency ↗</button>
+          </form>
+          <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><strong>{residency.name}</strong><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div>
+        </div>}
+        <div className="panel">
+          <div className="panel-heading"><div><div className="eyebrow">{superadmin ? "ACCESS MANAGEMENT" : "RESIDENT DIRECTORY"}</div><h2>{superadmin ? "Create account" : "Manage residents"}</h2></div><span className="count-badge">{users.length}</span></div>
+          <AccountForm onSubmit={createAccount} admin={admin} residencies={residencies} />
+          <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div>{superadmin ? <div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div> : <span className="status-pill">resident</span>}</article>)}</div>
+        </div>
+      </section>}
       <Footer />
     </main>
   );

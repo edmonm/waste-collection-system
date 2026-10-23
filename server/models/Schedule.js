@@ -5,7 +5,8 @@ const scheduleSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   wasteType: { type: String, required: true, enum: ["General waste", "Recycling", "Green waste", "Bulk collection"] },
   notes: { type: String, trim: true, maxlength: 300, default: "" },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  residencyId: { type: mongoose.Schema.Types.ObjectId, ref: "Residency", required: true }
 }, { timestamps: true });
 
 export const Schedule = mongoose.model("Schedule", scheduleSchema);

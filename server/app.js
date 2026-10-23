@@ -6,6 +6,8 @@ import { config } from "./config.js";
 import authRoutes from "./routes/auth.js";
 import scheduleRoutes from "./routes/schedules.js";
 import requestRoutes from "./routes/requests.js";
+import residencyRoutes from "./routes/residencies.js";
+import userRoutes from "./routes/users.js";
 
 export const app = express();
 
@@ -25,6 +27,8 @@ app.use("/api/auth", rateLimit({
 }), authRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api/residencies", residencyRoutes);
+app.use("/api/users", userRoutes);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Endpoint not found." });

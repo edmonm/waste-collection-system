@@ -1,7 +1,7 @@
 import { Router } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
-import { authenticate, requireRole } from "../middleware/auth.js";
+import { authenticate, requireAnyRole, requireRole } from "../middleware/auth.js";
 import { ServiceRequest } from "../models/ServiceRequest.js";
 import { sendSms } from "../services/sms.js";
 
@@ -14,10 +14,14 @@ const updateSchema = z.object({ status: z.literal("reviewed") });
 
 router.use(authenticate);
 
-router.post("/", requireRole("resident"), async (request, response, next) => {
+router.post("/", requireRole("user"), async (request, response, next) => {
   try {
     const input = createSchema.parse(request.body);
-    const serviceRequest = await ServiceRequest.create({ ...input, resident: request.user.id });
+    const serviceRequest = await ServiceRequest.create({
+      ...input,
+      resident: request.user.id,
+      residencyId: request.user.residencyId
+    });
     const notification = await sendSms(
       request.user.phone,
       "GreenLoop has received your community collection request. Your team will review it soon."
@@ -28,9 +32,10 @@ router.post("/", requireRole("resident"), async (request, response, next) => {
   }
 });
 
-router.get("/", requireRole("admin"), async (_request, response, next) => {
+router.get("/", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
   try {
-    const requests = await ServiceRequest.find()
+    const filter = request.user.role === "superadmin" ? {} : { residencyId: request.user.residencyId };
+    const requests = await ServiceRequest.find(filter)
       .populate("resident", "name phone email")
       .sort({ createdAt: -1 })
       .limit(200)
@@ -41,14 +46,17 @@ router.get("/", requireRole("admin"), async (_request, response, next) => {
   }
 });
 
-router.patch("/:id", requireRole("admin"), async (request, response, next) => {
+router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
   try {
     const { status } = updateSchema.parse(request.body);
     if (!mongoose.isValidObjectId(request.params.id)) {
       return response.status(400).json({ error: "Invalid request identifier." });
     }
-    const serviceRequest = await ServiceRequest.findByIdAndUpdate(
-      request.params.id,
+    const filter = request.user.role === "superadmin"
+      ? { _id: request.params.id }
+      : { _id: request.params.id, residencyId: request.user.residencyId };
+    const serviceRequest = await ServiceRequest.findOneAndUpdate(
+      filter,
       { status },
       { new: true, runValidators: true }
     ).populate("resident", "name phone email");

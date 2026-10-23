@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { config } from "../config.js";
 import { User } from "../models/User.js";
+import { Residency } from "../models/Residency.js";
 
 export async function authenticate(request, response, next) {
   const [scheme, token] = (request.headers.authorization || "").split(" ");
@@ -15,10 +16,28 @@ export async function authenticate(request, response, next) {
     return response.status(401).json({ error: "Your session has expired. Please sign in again." });
   }
 
-  const user = await User.findById(payload.sub).select("name email phone role");
+  const user = await User.findById(payload.sub).select("name email phone role residencyId");
   if (!user) return response.status(401).json({ error: "This account is no longer available." });
+  if (user.role !== "superadmin") {
+    if (!user.residencyId) {
+      return response.status(403).json({ error: "Your account needs a residency assignment. Ask a superadmin to assign one." });
+    }
+    const activeResidency = await Residency.exists({ _id: user.residencyId, active: true });
+    if (!activeResidency) {
+      return response.status(403).json({ error: "Your residency is inactive. Contact a superadmin for assistance." });
+    }
+  }
   request.user = user;
   return next();
+}
+
+export function requireAnyRole(...roles) {
+  return (request, response, next) => {
+    if (!roles.includes(request.user.role)) {
+      return response.status(403).json({ error: "You do not have permission to perform this action." });
+    }
+    return next();
+  };
 }
 
 export function requireRole(role) {
