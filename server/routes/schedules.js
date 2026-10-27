@@ -1,4 +1,5 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { authenticate, requireAnyRole } from "../middleware/auth.js";
 import { Schedule } from "../models/Schedule.js";
@@ -44,6 +45,22 @@ router.post("/", requireAnyRole("admin", "superadmin"), async (request, response
       `GreenLoop collection update: ${schedule.wasteType} in ${schedule.area} on ${new Date(schedule.date).toLocaleDateString()}.`
     );
     return response.status(201).json({ schedule, notification });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
+  try {
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid schedule identifier." });
+    }
+    const filter = request.user.role === "superadmin"
+      ? { _id: request.params.id }
+      : { _id: request.params.id, residencyId: request.user.residencyId };
+    const schedule = await Schedule.findOneAndDelete(filter);
+    if (!schedule) return response.status(404).json({ error: "Schedule not found." });
+    return response.json({ message: "Collection schedule deleted." });
   } catch (error) {
     return next(error);
   }

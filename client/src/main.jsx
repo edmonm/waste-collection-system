@@ -181,7 +181,7 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
   );
 }
 
-function ScheduleCard({ schedule }) {
+function ScheduleCard({ schedule, onDelete }) {
   const date = dateKeyDate(schedule.date);
   return (
     <article className="schedule-card">
@@ -190,6 +190,8 @@ function ScheduleCard({ schedule }) {
         <span className="status-pill">{schedule.wasteType}</span>
         <h3>{schedule.area}</h3>
         <p>{date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}{schedule.notes ? ` · ${schedule.notes}` : ""}</p>
+        <p>Estimated arrival: {formatArrivalTime(schedule.estimatedArrivalTime)}</p>
+        {onDelete && <button className="button button-small button-delete" type="button" onClick={() => onDelete(schedule._id, schedule.area)}>Delete collection</button>}
       </div>
     </article>
   );
@@ -314,7 +316,7 @@ function AccountForm({ onSubmit, admin, residencies }) {
   );
 }
 
-function RequestCard({ request, onApprove }) {
+function RequestCard({ request, onApprove, onDelete }) {
   return (
     <article className="request-card">
       <div className="request-meta"><span className={`status-pill ${request.status === "pending" ? "status-pending" : ""}`}>{request.status}</span><span>{new Date(request.createdAt).toLocaleDateString()}</span></div>
@@ -331,6 +333,7 @@ function RequestCard({ request, onApprove }) {
           <button className="button button-small button-outline" type="submit">Approve request</button>
         </form>
       )}
+      {onDelete && <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, request.kind === "missed_pickup" ? "Missed pickup" : "Special request")}>Delete request</button>}
     </article>
   );
 }
@@ -523,6 +526,30 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
+  async function deleteSchedule(id, label) {
+    if (!window.confirm(`Delete the collection schedule for "${label}"? Residents will no longer see it in their calendar.`)) return;
+    setNotice(null);
+    try {
+      await api(`/schedules/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setNotice({ message: "Collection schedule deleted." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
+  async function deleteServiceRequest(id, label) {
+    if (!window.confirm(`Delete this ${label.toLowerCase()} service request? This cannot be undone.`)) return;
+    setNotice(null);
+    try {
+      await api(`/requests/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setNotice({ message: "Service request deleted." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
   const openRequestCount = requests.filter((request) => request.status === "pending").length;
   const adminCount = users.filter((account) => account.role === "admin").length;
   const residentCount = users.filter((account) => account.role === "user" || account.role === "resident").length;
@@ -565,11 +592,11 @@ function Dashboard({ user, token, onLogout }) {
               <div className="dashboard-grid superadmin-overview-grid">
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Upcoming collections</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>Manage</button></div>
-                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
                 </section>
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>View all</button></div>
-                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
             </section>
@@ -596,11 +623,11 @@ function Dashboard({ user, token, onLogout }) {
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
               </div>
             </section>
           )}
@@ -613,14 +640,14 @@ function Dashboard({ user, token, onLogout }) {
                 <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
                 <div className="schedule-list">
-                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
                 </div>
               </div>
             ) : <ResidentCalendar schedules={schedules} requests={requests} />}
             {admin ? (
               <div className="panel requests-panel" id="admin-requests">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
               </div>
             ) : (
               <div className="panel request-panel">
@@ -628,7 +655,7 @@ function Dashboard({ user, token, onLogout }) {
                 <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
                 <form className="form-grid" onSubmit={submitRequest}>
                   <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
-                  <label>Details<textarea name="description" required minLength="8" maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
+                  <label>Details<textarea name="description" required maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
                   <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request ↗"}</button>
                 </form>
               </div>

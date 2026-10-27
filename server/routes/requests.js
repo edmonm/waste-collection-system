@@ -8,7 +8,7 @@ import { sendSms } from "../services/sms.js";
 const router = Router();
 const createSchema = z.object({
   kind: z.enum(["special_request", "missed_pickup"]),
-  description: z.string().trim().min(8).max(1000)
+  description: z.string().trim().min(1).max(1000)
 });
 const updateSchema = z.object({
   status: z.literal("approved"),
@@ -77,6 +77,22 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
       `GreenLoop approved your community collection request for ${scheduledDate}.`
     );
     return response.json({ request: serviceRequest, notification });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
+  try {
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid request identifier." });
+    }
+    const filter = request.user.role === "superadmin"
+      ? { _id: request.params.id }
+      : { _id: request.params.id, residencyId: request.user.residencyId };
+    const serviceRequest = await ServiceRequest.findOneAndDelete(filter);
+    if (!serviceRequest) return response.status(404).json({ error: "Service request not found." });
+    return response.json({ message: "Service request deleted." });
   } catch (error) {
     return next(error);
   }
