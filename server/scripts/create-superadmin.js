@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { connectDatabase } from "../db.js";
 import { User } from "../models/User.js";
+import { philippinesMobileMessage, philippinesMobilePattern } from "../constants.js";
 
 const { SUPERADMIN_NAME, SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD, SUPERADMIN_PHONE } = process.env;
 if (!SUPERADMIN_NAME || !SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD || !SUPERADMIN_PHONE) {
@@ -10,8 +11,8 @@ if (!SUPERADMIN_NAME || !SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD || !SUPERADMIN
 if (SUPERADMIN_PASSWORD.length < 8 || SUPERADMIN_PASSWORD.length > 72) {
   throw new Error("SUPERADMIN_PASSWORD must be between 8 and 72 characters.");
 }
-if (!/^\+[1-9]\d{7,14}$/.test(SUPERADMIN_PHONE)) {
-  throw new Error("SUPERADMIN_PHONE must use international format, for example +15551234567.");
+if (!philippinesMobilePattern.test(SUPERADMIN_PHONE)) {
+  throw new Error(`SUPERADMIN_PHONE: ${philippinesMobileMessage}`);
 }
 
 try {

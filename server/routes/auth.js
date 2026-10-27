@@ -6,9 +6,10 @@ import { config } from "../config.js";
 import { User } from "../models/User.js";
 import { Residency } from "../models/Residency.js";
 import { authenticate } from "../middleware/auth.js";
+import { philippinesMobileMessage, philippinesMobilePattern } from "../constants.js";
 
 const router = Router();
-const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter a phone number in international format.");
+const phoneSchema = z.string().regex(philippinesMobilePattern, philippinesMobileMessage);
 const registerSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(254),
@@ -19,12 +20,19 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(72),
-  loginAs: z.enum(["superadmin", "admin", "user"])
+  loginAs: z.enum(["superadmin", "admin", "user"]).optional()
+});
+const changePasswordSchema = z.object({
+  newPassword: z.string().min(8).max(72).refine((password) => password !== "11111111", "Choose a password other than the temporary password.")
 });
 
 function issueToken(user) {
   const role = user.role === "resident" ? "user" : user.role;
-  return jwt.sign({ sub: user.id, role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  return jwt.sign({ sub: user.id, role, purpose: "access" }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+}
+
+function issuePasswordChangeToken(user) {
+  return jwt.sign({ sub: user.id, purpose: "password-change" }, config.jwtSecret, { expiresIn: "10m" });
 }
 
 function publicUser(user) {
@@ -59,6 +67,7 @@ router.post("/register", async (request, response, next) => {
       email: input.email.toLowerCase(),
       passwordHash,
       role: "user",
+      mustChangePassword: false,
       residencyId: residency._id
     });
     return response.status(201).json({ token: issueToken(user), user: publicUser(user) });
@@ -73,8 +82,8 @@ router.post("/login", async (request, response, next) => {
     const input = loginSchema.parse(request.body);
     const user = await User.findOne({ email: input.email.toLowerCase() }).select("+passwordHash");
     const actualRole = user?.role === "resident" ? "user" : user?.role;
-    if (!user || actualRole !== input.loginAs || !(await bcrypt.compare(input.password, user.passwordHash))) {
-      return response.status(401).json({ error: "Email or password is incorrect for this sign-in type." });
+    if (!user || (input.loginAs && actualRole !== input.loginAs) || !(await bcrypt.compare(input.password, user.passwordHash))) {
+      return response.status(401).json({ error: "Email or password is incorrect." });
     }
     if (actualRole !== "superadmin") {
       if (!user.residencyId) {
@@ -83,6 +92,44 @@ router.post("/login", async (request, response, next) => {
       const residency = await Residency.findOne({ _id: user.residencyId, active: true });
       if (!residency) return response.status(403).json({ error: "This account's residency is inactive. Contact a superadmin." });
     }
+    await user.populate("residencyId", "name");
+    if (user.mustChangePassword) {
+      return response.json({
+        passwordChangeRequired: true,
+        passwordChangeToken: issuePasswordChangeToken(user),
+        user: publicUser(user)
+      });
+    }
+    return response.json({ token: issueToken(user), user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/change-password", async (request, response, next) => {
+  try {
+    const [scheme, token] = (request.headers.authorization || "").split(" ");
+    if (scheme !== "Bearer" || !token) {
+      return response.status(401).json({ error: "Your password change session is missing or expired. Please sign in again." });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(token, config.jwtSecret);
+    } catch {
+      return response.status(401).json({ error: "Your password change session has expired. Please sign in again." });
+    }
+    if (payload.purpose !== "password-change") {
+      return response.status(403).json({ error: "A temporary-password session is required to change your password." });
+    }
+
+    const { newPassword } = changePasswordSchema.parse(request.body);
+    const user = await User.findOneAndUpdate(
+      { _id: payload.sub, mustChangePassword: true, role: { $in: ["admin", "user"] } },
+      { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
+      { new: true, runValidators: true }
+    );
+    if (!user) return response.status(403).json({ error: "This account no longer requires a password change. Sign in again." });
     await user.populate("residencyId", "name");
     return response.json({ token: issueToken(user), user: publicUser(user) });
   } catch (error) {

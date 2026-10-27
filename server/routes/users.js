@@ -5,14 +5,14 @@ import { z } from "zod";
 import { authenticate, requireAnyRole } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Residency } from "../models/Residency.js";
+import { philippinesMobileMessage, philippinesMobilePattern, temporaryPassword } from "../constants.js";
 
 const router = Router();
-const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter a phone number in international format.");
+const phoneSchema = z.string().regex(philippinesMobilePattern, philippinesMobileMessage);
 const createUserSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(254),
   phone: phoneSchema,
-  password: z.string().min(8).max(72),
   role: z.enum(["admin", "user"]),
   residencyId: z.string().regex(/^[a-f\d]{24}$/i).optional()
 });
@@ -48,13 +48,14 @@ router.post("/", async (request, response, next) => {
     if (!residencyId) return response.status(400).json({ error: "Select a residency for this account." });
     const residency = await Residency.findOne({ _id: residencyId, active: true });
     if (!residency) return response.status(400).json({ error: "Choose an active residency." });
-    const passwordHash = await bcrypt.hash(input.password, 12);
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
     const user = await User.create({
       name: input.name,
       email: input.email.toLowerCase(),
       phone: input.phone,
       passwordHash,
       role,
+      mustChangePassword: true,
       residencyId: residency._id
     });
     await user.populate("residencyId", "name");
@@ -89,7 +90,11 @@ router.patch("/:id", async (request, response, next) => {
     const user = await User.findById(request.params.id);
     if (!user || user.role === "superadmin") return response.status(404).json({ error: "Account not found." });
     user.residencyId = residency._id;
-    if (input.role) user.role = input.role;
+    if (input.role && input.role !== user.role) {
+      user.role = input.role;
+      user.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+      user.mustChangePassword = true;
+    }
     await user.save();
     await user.populate("residencyId", "name");
     return response.json({

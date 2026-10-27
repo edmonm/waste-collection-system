@@ -71,3 +71,73 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .single-column { grid-template-columns: 1fr; }.single-column .button { grid-column: auto; }
 .resident-list { display: grid; gap: 8px; margin-top: 12px; }.resident-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px; border: 1px solid #edf0ea; border-radius: 8px; }.resident-row strong, .resident-row small { display: block; }.resident-row strong { font: 700 11px "Manrope", sans-serif; }.resident-row small { margin-top: 4px; color: #828b7f; font-size: 9px; }.resident-row > span { color: #75816f; font-size: 9px; }.resident-admin-actions { display: grid; gap: 5px; }.resident-admin-actions select { max-width: 155px; border: 1px solid #e1e6dd; border-radius: 6px; background: #fbfcfa; padding: 7px; color: #465342; font-size: 9px; }
 @media (max-width: 760px) { .management-grid { grid-template-columns: 1fr; }.role-tabs .tab { min-width: 45%; } }
+.auth-shell { width: min(1120px, 100%); min-height: 100vh; padding: 0 6%; margin: auto; display: flex; flex-direction: column; }
+.auth-header { min-height: 82px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e6e9e1; }
+.auth-header-note { color: #7c8578; font-size: 10px; font-weight: 600; letter-spacing: 1.2px; }
+.auth-layout { flex: 1; display: grid; grid-template-columns: 1fr minmax(340px, .82fr); align-items: center; gap: 11%; padding: 54px 0; }
+.auth-welcome { padding: 25px 0; }
+.auth-welcome h1 { margin: 18px 0; font: 800 clamp(38px, 5vw, 61px)/1.08 "Manrope", sans-serif; letter-spacing: -3px; }
+.auth-welcome h1 span { color: #71936b; }
+.auth-welcome > p { max-width: 410px; color: #707b6f; font-size: 14px; line-height: 1.8; }
+.auth-highlight { display: flex; align-items: center; gap: 12px; margin-top: 40px; }
+.auth-highlight-icon { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 12px; background: #e8eee1; color: #58764f; font-size: 25px; }
+.auth-highlight strong, .auth-highlight div span { display: block; }
+.auth-highlight strong { margin-bottom: 4px; font: 700 12px "Manrope", sans-serif; }
+.auth-highlight div span { color: #7b8578; font-size: 10px; }
+.auth-card { padding: 28px; border: 1px solid #e9ece5; border-radius: 14px; background: #fff; box-shadow: 0 16px 45px #304f3a0c; }
+.auth-card-heading { margin-bottom: 21px; }
+.auth-card-heading h2 { margin: 8px 0; font: 700 24px "Manrope", sans-serif; letter-spacing: -.8px; }
+.auth-card-heading p { margin: 0; color: #788174; font-size: 11px; line-height: 1.6; }
+.auth-tabs { margin-bottom: 20px; }
+.auth-tabs .tab { padding: 10px; font-size: 12px; }
+.auth-shell footer { margin-top: auto; }
+@media (max-width: 760px) {
+  .auth-shell { padding: 0 5%; }
+  .auth-layout { grid-template-columns: 1fr; gap: 10px; max-width: 480px; width: 100%; margin: auto; padding: 35px 0; }
+  .auth-welcome { padding: 0; }
+  .auth-welcome h1 { margin: 13px 0; font-size: 42px; }
+  .auth-welcome > p { margin-bottom: 0; font-size: 12px; }
+  .auth-highlight { display: none; }
+  .auth-card { padding: 22px; }
+}
+@media (max-width: 420px) {
+  .auth-header { min-height: 68px; }
+  .auth-header-note { font-size: 8px; letter-spacing: .8px; }
+  .auth-card { padding: 18px; }
+}
+.admin-section-tabs { display: flex; gap: 5px; padding: 5px; margin: 0 0 20px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
+.admin-section-tab { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 10px 16px; background: transparent; color: #788174; font-size: 11px; font-weight: 600; cursor: pointer; }
+.admin-section-tab:hover { color: #304f3a; background: #f7f9f5; }
+.admin-section-tab.active { color: #fff; background: #304f3a; }
+.superadmin-content { margin-bottom: 20px; }
+.overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.overview-stat { display: grid; gap: 7px; padding: 17px; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
+.overview-stat span, .overview-stat small { color: #788174; font-size: 10px; }
+.overview-stat strong { color: #304f3a; font: 700 27px/1 "Manrope", sans-serif; }
+.overview-stat small { color: #99a093; font-size: 9px; }
+.superadmin-overview-grid { margin-top: 0; }
+.text-action { border: 0; padding: 7px 10px; border-radius: 6px; background: #eff4e9; color: #4e6f47; font-size: 10px; font-weight: 700; cursor: pointer; }
+.text-action:hover { background: #e4eddd; }
+.residency-create-form { display: flex; align-items: end; gap: 12px; max-width: 620px; padding: 15px; border-radius: 9px; background: #f8faf6; }
+.residency-create-form label { flex: 1; display: grid; gap: 6px; color: #556151; font-size: 10px; font-weight: 600; }
+.residency-create-form input { width: 100%; border: 1px solid #e1e6dd; border-radius: 7px; background: #fff; outline: 0; padding: 10px 11px; color: #28362a; font-size: 11px; }
+.residency-create-form input:focus { border-color: #8ca980; box-shadow: 0 0 0 3px #8ca98020; }
+.residency-create-form .button { white-space: nowrap; }
+.superadmin-content > .resident-list { max-width: 820px; }
+.superadmin-operations { margin-top: 0; }
+.superadmin-operations > .panel { min-width: 0; }
+.superadmin-operations .inline-form { grid-template-columns: 1fr; }
+.superadmin-operations .inline-form .button { grid-column: auto; }
+.superadmin-operations .request-list { max-height: 680px; overflow-y: auto; padding-right: 3px; }
+.management-password-note { grid-column: 1 / -1; line-height: 1.6; }
+.management-password-note strong { color: #405c3a; }
+.password-change-layout { grid-template-columns: 1fr minmax(340px, .82fr); }
+@media (max-width: 760px) {
+  .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .overview-stat { padding: 13px; }
+  .admin-section-tabs { margin-bottom: 14px; }
+  .admin-section-tab { padding: 9px 13px; }
+  .residency-create-form { align-items: stretch; flex-direction: column; }
+  .residency-create-form .button { align-self: flex-start; }
+  .password-change-layout { grid-template-columns: 1fr; }
+}

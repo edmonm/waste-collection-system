@@ -15,9 +15,15 @@ export async function authenticate(request, response, next) {
   } catch {
     return response.status(401).json({ error: "Your session has expired. Please sign in again." });
   }
+  if (payload.purpose === "password-change") {
+    return response.status(403).json({ error: "Change your temporary password before continuing." });
+  }
 
-  const user = await User.findById(payload.sub).select("name email phone role residencyId");
+  const user = await User.findById(payload.sub).select("name email phone role residencyId mustChangePassword");
   if (!user) return response.status(401).json({ error: "This account is no longer available." });
+  if (user.mustChangePassword) {
+    return response.status(403).json({ error: "Change your temporary password before continuing." });
+  }
   if (user.role !== "superadmin") {
     if (!user.residencyId) {
       return response.status(403).json({ error: "Your account needs a residency assignment. Ask a superadmin to assign one." });

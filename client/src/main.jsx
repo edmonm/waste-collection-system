@@ -31,10 +31,13 @@ function Notice({ notice }) {
   return <div className={`notice ${notice.isError ? "notice-error" : "notice-success"}`} role="status">{notice.message}</div>;
 }
 
-function Landing({ onAuthenticated, initialNotice = null }) {
+function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordChange, passwordChange, initialNotice = null }) {
   const [mode, setMode] = useState("login");
-  const [loginAs, setLoginAs] = useState("user");
   const [residencies, setResidencies] = useState([]);
+  const [fields, setFields] = useState({ name: "", email: "", phone: "", password: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [focusedField, setFocusedField] = useState(null);
   const [notice, setNotice] = useState(initialNotice ? { message: initialNotice, isError: true } : null);
   const [submitting, setSubmitting] = useState(false);
   const registering = mode === "register";
@@ -50,12 +53,37 @@ function Landing({ onAuthenticated, initialNotice = null }) {
     setSubmitting(true);
     setNotice(null);
     const data = Object.fromEntries(new FormData(event.currentTarget));
-    if (!registering) data.loginAs = loginAs;
     try {
       const result = await api(`/auth/${registering ? "register" : "login"}`, {
         method: "POST",
         body: JSON.stringify(data)
       }, null);
+      if (result.passwordChangeRequired) {
+        onPasswordChangeRequired(result.passwordChangeToken, result.user);
+        return;
+      }
+      localStorage.setItem(tokenKey, result.token);
+      onAuthenticated(result.user, result.token);
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitPasswordChange(event) {
+    event.preventDefault();
+    setNotice(null);
+    if (newPassword !== confirmPassword) {
+      setNotice({ message: "The passwords do not match.", isError: true });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await api("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ newPassword })
+      }, passwordChange.token);
       localStorage.setItem(tokenKey, result.token);
       onAuthenticated(result.user, result.token);
     } catch (error) {
@@ -67,62 +95,84 @@ function Landing({ onAuthenticated, initialNotice = null }) {
 
   function changeMode(nextMode) {
     setMode(nextMode);
+    setFields({ name: "", email: "", phone: "", password: "" });
+    setFocusedField(null);
     setNotice(null);
   }
 
-  function changeLoginAs(role) {
-    setMode("login");
-    setLoginAs(role);
-    setNotice(null);
+  function updateField(event) {
+    const { name, value } = event.target;
+    setFields((current) => ({ ...current, [name]: value }));
+  }
+
+  if (passwordChange) {
+    return (
+      <main className="auth-shell">
+        <header className="auth-header">
+          <Brand />
+          <span className="auth-header-note">COMMUNITY WASTE COLLECTION</span>
+        </header>
+        <section className="auth-layout password-change-layout">
+          <div className="auth-welcome">
+            <div className="eyebrow"><span className="eyebrow-dot"></span> ONE MORE STEP</div>
+            <h1>Secure your<br /><span>account.</span></h1>
+            <p>Hi {passwordChange.user.name.split(" ")[0]}, set a new password before continuing to your dashboard.</p>
+          </div>
+          <div className="auth-card">
+            <div className="auth-card-heading">
+              <div className="eyebrow">FIRST SIGN-IN</div>
+              <h2>Create your password</h2>
+              <p>Choose a password with at least 8 characters. Do not reuse the temporary password.</p>
+            </div>
+            <Notice notice={notice} />
+            <form className="form-grid" onSubmit={submitPasswordChange} autoComplete="off">
+              <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength="8" maxLength="72" /></label>
+              <label>Confirm new password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength="8" maxLength="72" /></label>
+              <button className="button button-dark button-full" type="submit" disabled={submitting}>{submitting ? "Updating..." : "Set password and continue"} <span aria-hidden="true">↗</span></button>
+              <button className="button button-outline" type="button" onClick={onCancelPasswordChange}>Back to login</button>
+            </form>
+          </div>
+        </section>
+        <Footer />
+      </main>
+    );
   }
 
   return (
-    <main className="page-shell">
-      <nav className="topbar">
+    <main className="auth-shell">
+      <header className="auth-header">
         <Brand />
-        <span className="nav-caption">A cleaner neighborhood starts together</span>
-        <a className="button button-outline" href="#account">Sign in</a>
-      </nav>
-      <section className="hero">
-        <div className="hero-copy">
-          <div className="eyebrow"><span className="eyebrow-dot"></span> COMMUNITY COLLECTION, MADE SIMPLE</div>
-          <h1>A cleaner community<br />is <span>on the calendar.</span></h1>
-          <p>Know when collection is coming, stay in the loop, and let your community team know when you need a hand.</p>
-          <a className="button button-dark" href="#account">Get started <span aria-hidden="true">↗</span></a>
-          <div className="hero-proof"><span className="avatar-stack"><i>J</i><i>M</i><i>A</i></span><span>Built for residents and the people who serve them</span></div>
+        <span className="auth-header-note">COMMUNITY WASTE COLLECTION</span>
+      </header>
+      <section className="auth-layout">
+        <div className="auth-welcome">
+          <div className="eyebrow"><span className="eyebrow-dot"></span> A CLEANER COMMUNITY STARTS HERE</div>
+          <h1>Your community,<br />all <span>in the loop.</span></h1>
+          <p>Stay up to date with collection schedules, neighborhood news, and the support your community provides.</p>
+          <div className="auth-highlight">
+            <span className="auth-highlight-icon" aria-hidden="true">↻</span>
+            <div><strong>Good things are growing.</strong><span>Let's keep your neighborhood moving forward.</span></div>
+          </div>
         </div>
-        <div className="hero-art" aria-label="Illustration of a clean green neighborhood">
-          <div className="sun"></div><div className="cloud cloud-one"></div><div className="cloud cloud-two"></div>
-          <div className="hill hill-back"></div><div className="hill hill-front"></div>
-          <div className="house house-one"><span></span><i></i></div><div className="house house-two"><span></span><i></i></div>
-          <div className="tree tree-one"></div><div className="tree tree-two"></div>
-          <div className="pickup-card"><span className="pickup-icon">↻</span><span><small>NEXT COLLECTION</small><strong>Right on schedule.</strong></span><span className="pickup-check">✓</span></div>
-          <span className="art-label">GOOD THINGS<br />ARE GROWING</span>
-        </div>
-      </section>
-      <section className="feature-row">
-        <article><span className="feature-icon">▦</span><div><h3>Schedules at a glance</h3><p>See upcoming collections in one simple calendar.</p></div></article>
-        <article><span className="feature-icon">↗</span><div><h3>Updates that reach you</h3><p>Get helpful SMS reminders when notifications are enabled.</p></div></article>
-        <article><span className="feature-icon">♡</span><div><h3>Help when you need it</h3><p>Send a special request or report a missed pickup.</p></div></article>
-      </section>
-      <section className="account-section" id="account">
-        <div><div className="eyebrow">YOUR COMMUNITY, CONNECTED</div><h2>Let's get you started.</h2><p>Create a resident account or sign in to see your dashboard.</p></div>
-        <div className="account-card">
-          <div className="tabs role-tabs">
-            <button className={`tab ${!registering && loginAs === "user" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("user")}>Resident</button>
-            <button className={`tab ${!registering && loginAs === "admin" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("admin")}>Admin</button>
-            <button className={`tab ${!registering && loginAs === "superadmin" ? "active" : ""}`} type="button" onClick={() => changeLoginAs("superadmin")}>Superadmin</button>
-            <button className={`tab ${registering ? "active" : ""}`} type="button" onClick={() => changeMode("register")}>Register</button>
+        <div className="auth-card">
+          <div className="auth-card-heading">
+            <div className="eyebrow">{registering ? "JOIN YOUR COMMUNITY" : "WELCOME BACK"}</div>
+            <h2>{registering ? "Create your account" : "Sign in to GreenLoop"}</h2>
+            <p>{registering ? "Register as a resident to get started." : "Enter your details to continue to your account."}</p>
+          </div>
+          <div className="tabs auth-tabs" role="tablist" aria-label="Account access">
+            <button className={`tab ${!registering ? "active" : ""}`} type="button" role="tab" aria-selected={!registering} onClick={() => changeMode("login")}>Login</button>
+            <button className={`tab ${registering ? "active" : ""}`} type="button" role="tab" aria-selected={registering} onClick={() => changeMode("register")}>Register</button>
           </div>
           <Notice notice={notice} />
-          <form className="form-grid" onSubmit={submitAuth}>
-            {registering && <label>Full name<input name="name" autoComplete="name" required maxLength="80" placeholder="Your name" /></label>}
-            <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></label>
-            {registering && <label>Mobile number<input name="phone" type="tel" autoComplete="tel" required placeholder="+15551234567" /><small>Use international format, including the country code.</small></label>}
+          <form className="form-grid" onSubmit={submitAuth} autoComplete="off">
+            {registering && <label>Full name<input name="name" autoComplete="off" value={fields.name} onChange={updateField} readOnly={focusedField !== "name"} onFocus={() => setFocusedField("name")} required maxLength="80" /></label>}
+            <label>Email address<input name="email" type="email" autoComplete="off" value={fields.email} onChange={updateField} readOnly={focusedField !== "email"} onFocus={() => setFocusedField("email")} required /></label>
+            {registering && <label>Mobile number<input name="phone" type="tel" autoComplete="off" value={fields.phone} onChange={updateField} readOnly={focusedField !== "phone"} onFocus={() => setFocusedField("phone")} required /><small>Use Philippine format with +63 country code (for example, +639171234567).</small></label>}
             {registering && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select your residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select>{residencies.length === 0 && <small>There are no active residencies yet. Contact the system administrator.</small>}</label>}
-            <label>Password<input name="password" type="password" autoComplete={registering ? "new-password" : "current-password"} required minLength="8" placeholder="At least 8 characters" /></label>
-            <button className="button button-dark button-full" type="submit" disabled={submitting || (registering && residencies.length === 0)}>{submitting ? "Please wait..." : registering ? "Create resident account" : `Sign in as ${loginAs === "user" ? "resident" : loginAs}`} <span aria-hidden="true">↗</span></button>
-            <p className="form-footnote">{registering ? "Resident accounts are assigned to one residency." : `This sign-in is for ${loginAs === "user" ? "residents" : `${loginAs}s`} only.`}</p>
+            <label>Password<input name="password" type="password" autoComplete="new-password" value={fields.password} onChange={updateField} readOnly={focusedField !== "password"} onFocus={() => setFocusedField("password")} required minLength="8" /></label>
+            <button className="button button-dark button-full" type="submit" disabled={submitting || (registering && residencies.length === 0)}>{submitting ? "Please wait..." : registering ? "Create resident account" : "Login"} <span aria-hidden="true">↗</span></button>
+            {registering && <p className="form-footnote">Resident accounts are assigned to one residency.</p>}
           </form>
         </div>
       </section>
@@ -164,11 +214,11 @@ function AccountForm({ onSubmit, admin, residencies }) {
       {admin && <input type="hidden" name="role" value="user" />}
       <label>Full name<input name="name" required minLength="2" maxLength="80" /></label>
       <label>Email address<input name="email" type="email" required maxLength="254" /></label>
-      <label>Phone number<input name="phone" type="tel" required placeholder="+15551234567" /><small>Include country code.</small></label>
-      <label>Temporary password<input name="password" type="password" required minLength="8" maxLength="72" /></label>
+      <label>Phone number<input name="phone" type="tel" required placeholder="+639171234567" /><small>Use Philippine mobile format beginning with +639.</small></label>
       {!admin && <label>Account type<select name="role"><option value="admin">Residency admin</option><option value="user">Resident</option></select></label>}
       {!admin && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
       <button className="button button-dark" type="submit">Create {admin ? "resident" : "account"} ↗</button>
+      <p className="form-footnote management-password-note">Temporary password: <strong>11111111</strong>. They must create a new password before accessing the dashboard.</p>
     </form>
   );
 }
@@ -193,6 +243,7 @@ function Dashboard({ user, token, onLogout }) {
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [superadminView, setSuperadminView] = useState("overview");
   const admin = user.role === "admin";
   const superadmin = user.role === "superadmin";
 
@@ -322,7 +373,7 @@ function Dashboard({ user, token, onLogout }) {
         body: JSON.stringify({ residencyId, role })
       }, token);
       await refreshDashboard();
-      setNotice({ message: "Account residency updated." });
+      setNotice({ message: "Account updated. If the role changed, the account holder must use the temporary password and set a new one." });
     } catch (error) {
       setNotice({ message: error.message, isError: true });
     }
@@ -359,51 +410,109 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
+  const openRequestCount = requests.filter((request) => request.status === "pending").length;
+  const adminCount = users.filter((account) => account.role === "admin").length;
+  const residentCount = users.filter((account) => account.role === "user" || account.role === "resident").length;
+
   return (
     <main className="dashboard-shell">
       <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{superadmin ? "SUPERADMIN" : admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
       <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
-      <section className="dashboard-grid">
-        <div className="panel schedule-panel">
-          <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{admin ? "Manage schedules" : "Upcoming collections"}</h2></div><span className="count-badge">{schedules.length}</span></div>
-          {(admin || superadmin) && <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin={admin} />}
-          <div className="schedule-list">
-            {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
-          </div>
-        </div>
-        {admin || superadmin ? (
-          <div className="panel requests-panel">
-            <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{requests.filter((request) => request.status === "pending").length} open</span></div>
-            <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
-          </div>
-        ) : (
-          <div className="panel request-panel">
-            <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
-            <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
-            <form className="form-grid" onSubmit={submitRequest}>
-              <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
-              <label>Details<textarea name="description" required minLength="8" maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
-              <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request ↗"}</button>
-            </form>
-          </div>
-        )}
-      </section>
-      {(admin || superadmin) && <section className="management-grid">
-        {superadmin && <div className="panel">
-          <div className="panel-heading"><div><div className="eyebrow">SYSTEM SETUP</div><h2>Residencies</h2></div><span className="count-badge">{residencies.length}</span></div>
-          <form className="inline-form single-column" onSubmit={createResidency}>
-            <label>Residency name<input name="name" required minLength="2" maxLength="100" placeholder="e.g. North District" /></label>
-            <button className="button button-dark" type="submit" disabled={submitting}>Create residency ↗</button>
-          </form>
-          <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><strong>{residency.name}</strong><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div>
-        </div>}
-        <div className="panel">
-          <div className="panel-heading"><div><div className="eyebrow">{superadmin ? "ACCESS MANAGEMENT" : "RESIDENT DIRECTORY"}</div><h2>{superadmin ? "Create account" : "Manage residents"}</h2></div><span className="count-badge">{users.length}</span></div>
-          <AccountForm onSubmit={createAccount} admin={admin} residencies={residencies} />
-          <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div>{superadmin ? <div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div> : <span className="status-pill">resident</span>}</article>)}</div>
-        </div>
-      </section>}
+      {superadmin ? (
+        <>
+          <nav className="admin-section-tabs" aria-label="Superadmin sections">
+            {[["overview", "Overview"], ["residencies", "Residencies"], ["accounts", "Accounts"], ["collections", "Collections"]].map(([view, label]) => (
+              <button key={view} type="button" className={`admin-section-tab ${superadminView === view ? "active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}</button>
+            ))}
+          </nav>
+          {superadminView === "overview" && (
+            <section className="superadmin-content">
+              <div className="overview-stats">
+                <article className="overview-stat"><span>Active residencies</span><strong>{residencies.filter((residency) => residency.active).length}</strong><small>{residencies.length} total</small></article>
+                <article className="overview-stat"><span>Administrators</span><strong>{adminCount}</strong><small>Across all residencies</small></article>
+                <article className="overview-stat"><span>Residents</span><strong>{residentCount}</strong><small>Registered accounts</small></article>
+                <article className="overview-stat"><span>Open requests</span><strong>{openRequestCount}</strong><small>Awaiting review</small></article>
+              </div>
+              <div className="dashboard-grid superadmin-overview-grid">
+                <section className="panel">
+                  <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Upcoming collections</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>Manage</button></div>
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
+                </section>
+                <section className="panel">
+                  <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>View all</button></div>
+                  {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                </section>
+              </div>
+            </section>
+          )}
+          {superadminView === "residencies" && (
+            <section className="superadmin-content panel">
+              <div className="panel-heading"><div><div className="eyebrow">SYSTEM SETUP</div><h2>Manage residencies</h2></div><span className="count-badge">{residencies.length}</span></div>
+              <form className="residency-create-form" onSubmit={createResidency}>
+                <label>Residency name<input name="name" required minLength="2" maxLength="100" placeholder="Enter a residency name" /></label>
+                <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Creating..." : "Create residency"}</button>
+              </form>
+              {loading ? <div className="empty-state"><p>Loading residencies...</p></div> : residencies.length ? <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><div><strong>{residency.name}</strong><small>{residency.active ? "Active" : "Inactive"}</small></div><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div> : <div className="empty-state"><p>No residencies yet. Create one to get started.</p></div>}
+            </section>
+          )}
+          {superadminView === "accounts" && (
+            <section className="superadmin-content panel">
+              <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Manage accounts</h2></div><span className="count-badge">{users.length}</span></div>
+              <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} />
+              {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div></article>)}</div> : <div className="empty-state"><p>No accounts yet. Create an admin or resident account above.</p></div>}
+            </section>
+          )}
+          {superadminView === "collections" && (
+            <section className="superadmin-content dashboard-grid superadmin-operations">
+              <div className="panel">
+                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage schedules</h2></div><span className="count-badge">{schedules.length}</span></div>
+                <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+              </div>
+              <div className="panel">
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
+                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
+              </div>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          <section className="dashboard-grid">
+            <div className="panel schedule-panel">
+              <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{admin ? "Manage schedules" : "Upcoming collections"}</h2></div><span className="count-badge">{schedules.length}</span></div>
+              {admin && <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin />}
+              <div className="schedule-list">
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+              </div>
+            </div>
+            {admin ? (
+              <div className="panel requests-panel">
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
+                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+              </div>
+            ) : (
+              <div className="panel request-panel">
+                <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
+                <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
+                <form className="form-grid" onSubmit={submitRequest}>
+                  <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
+                  <label>Details<textarea name="description" required minLength="8" maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
+                  <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request ↗"}</button>
+                </form>
+              </div>
+            )}
+          </section>
+          {admin && <section className="management-grid">
+            <div className="panel">
+              <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
+              <AccountForm onSubmit={createAccount} admin residencies={residencies} />
+              <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div>
+            </div>
+          </section>}
+        </>
+      )}
       <Footer />
     </main>
   );
@@ -411,6 +520,7 @@ function Dashboard({ user, token, onLogout }) {
 
 function App() {
   const [auth, setAuth] = useState(null);
+  const [passwordChange, setPasswordChange] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [sessionError, setSessionError] = useState(null);
 
@@ -438,11 +548,23 @@ function App() {
   function logout() {
     localStorage.removeItem(tokenKey);
     setAuth(null);
+    setPasswordChange(null);
   }
 
   if (checkingSession) return <main className="page-shell"><div className="empty-state">Loading your community...</div></main>;
   if (auth) return <Dashboard key={auth.user.id} user={auth.user} token={auth.token} onLogout={logout} />;
-  return <Landing onAuthenticated={(user, token) => setAuth({ user, token })} initialNotice={sessionError} />;
+  return (
+    <Landing
+      passwordChange={passwordChange}
+      onPasswordChangeRequired={(token, user) => setPasswordChange({ token, user })}
+      onCancelPasswordChange={() => setPasswordChange(null)}
+      onAuthenticated={(user, token) => {
+        setPasswordChange(null);
+        setAuth({ user, token });
+      }}
+      initialNotice={sessionError}
+    />
+  );
 }
 
 createRoot(document.getElementById("app")).render(<App />);

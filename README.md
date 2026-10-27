@@ -63,12 +63,12 @@ JWT_EXPIRES_IN=1d
 SUPERADMIN_NAME=System Superadmin
 SUPERADMIN_EMAIL=you@example.com
 SUPERADMIN_PASSWORD=choose-a-private-password
-SUPERADMIN_PHONE=+15551234567
+SUPERADMIN_PHONE=+639171234567
 ```
 
 - For a local MongoDB installation, keep the example `MONGODB_URI` and make sure MongoDB Server is running before you start GreenLoop.
 - For MongoDB Atlas, replace `MONGODB_URI` with your Atlas connection URI. Make sure your IP address and database credentials are allowed by Atlas.
-- Replace the superadmin example details with your own. The password must be **8-72 characters**. The phone number must use international format, including `+` and country code.
+- Replace the superadmin example details with your own. The password must be **8-72 characters**. Phone numbers must use Philippine mobile format: `+639` followed by 9 digits.
 - Use a long, private random value for `JWT_SECRET`. Do not share or commit `.env`.
 - Twilio variables are optional. Leave them blank to use the app without SMS delivery.
 
@@ -99,21 +99,23 @@ To stop the servers, focus the terminal running `npm run dev` and press **Ctrl+C
 
 After the app is running:
 
-1. On the sign-in page, choose **Superadmin** and sign in with the email and password from `.env`.
+1. On the sign-in page, choose **Login** and sign in with the superadmin email and password from `.env`.
 2. In the superadmin dashboard, create a **residency**.
-3. Create an **Admin** account and assign it to that residency. The admin can manage residents and collection activity only for that residency.
-4. Residents can create accounts from the public **Register** option and select an active residency. Residents can see its schedules and submit service requests.
-5. Admins and superadmins use their matching sign-in option. Choosing the wrong user type will not sign in, even when the email and password are correct.
+3. Create an **Admin** account and assign it to that residency. The admin can manage residents, schedules, and service requests only for its assigned residency.
+4. Residents can create accounts from the public **Register** option and select an active residency. Each resident sees schedules for their own residency and receives schedule SMS notifications when Twilio is configured.
+5. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
 
 | Account type | Can do |
 | --- | --- |
-| **Superadmin** | Manage residencies, create admins, assign accounts to residencies, and oversee schedules and requests across the system. |
+| **Superadmin** | System owner with access across all residencies, accounts, schedules, and service requests. |
 | **Admin** | Manage residents, schedules, and service requests in the admin's assigned residency. |
-| **Resident (user)** | View their residency's collection schedules and submit special or missed-pickup requests. |
+| **User (resident)** | View their own residency's collection schedules, receive schedule notifications when SMS is enabled, and submit service requests. |
 
 Public registration creates resident accounts only. Admins are created by a superadmin.
+
+Accounts created by an admin or superadmin receive the temporary password `11111111`. On first login, the account holder must choose a new password before the dashboard or any protected features are available. Public resident registration continues to let residents choose their own password.
 
 ## Everyday commands
 
@@ -159,7 +161,11 @@ Update `SUPERADMIN_PASSWORD` in `.env` to a password between 8 and 72 characters
 
 ### Login says the email or password is incorrect
 
-Choose the sign-in option matching the account type (**Resident**, **Admin**, or **Superadmin**). Check the email for typos and use the password configured for that account. A resident account cannot sign in through the Admin or Superadmin option.
+Check the email for typos and use the password configured for that account. Login automatically identifies whether the account is a resident, admin, or superadmin.
+
+### First login requires a password change
+
+Accounts created by an admin or superadmin must sign in with the temporary password `11111111`, then set a new password before opening the dashboard. The temporary-password session expires after 10 minutes; sign in again if it expires.
 
 ### Admin account has no residency
 
@@ -178,7 +184,7 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | GET | `/api/health` | Public | Check that the API is responding. |
 | GET | `/api/auth/residencies` | Public | List active residencies for resident registration. |
 | POST | `/api/auth/register` | Public | Register a resident. |
-| POST | `/api/auth/login` | Public | Sign in with a selected account type. |
+| POST | `/api/auth/login` | Public | Sign in; the account type is identified automatically. |
 | GET | `/api/auth/me` | Signed in | Get the current account. |
 | GET/POST | `/api/residencies` | Superadmin | List or create residencies. |
 | PATCH | `/api/residencies/:id` | Superadmin | Activate or deactivate a residency. |
