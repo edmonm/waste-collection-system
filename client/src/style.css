@@ -132,7 +132,9 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .admin-dashboard-nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 5px; padding: 6px; margin: 0 0 18px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #ffffffed; box-shadow: 0 5px 16px #304f3a0a; backdrop-filter: blur(8px); }
 .admin-dashboard-nav a { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 7px; color: #64705f; font-size: 10px; font-weight: 700; transition: background .15s, color .15s; }
 .admin-dashboard-nav a:hover, .admin-dashboard-nav a:focus-visible { background: #eff4e9; color: #304f3a; outline: none; }
+.admin-dashboard-nav a.active, .admin-dashboard-nav a.active:hover { background: #304f3a; color: #fff; }
 .admin-dashboard-nav a span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
+.admin-dashboard-nav a.active span { background: #fff; color: #304f3a; }
 .admin-dashboard-nav ~ .dashboard-grid > .panel, .admin-residents-section { scroll-margin-top: 70px; }
 @media (max-width: 760px) {
   .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }

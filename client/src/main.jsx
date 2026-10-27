@@ -3,6 +3,12 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 
 const tokenKey = "greenloop-token";
+const adminPageLinks = [
+  ["admin-overview", "Overview"],
+  ["admin-schedules", "Schedules"],
+  ["admin-requests", "Service requests"],
+  ["admin-residents", "Residents"]
+];
 
 async function api(path, options = {}, token = localStorage.getItem(tokenKey)) {
   const response = await fetch(`/api${path}`, {
@@ -220,8 +226,21 @@ function Dashboard({ user, token, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
+  const [adminPage, setAdminPage] = useState(() => {
+    const page = window.location.hash.slice(1);
+    return adminPageLinks.some(([id]) => id === page) ? page : "admin-overview";
+  });
   const admin = user.role === "admin";
   const superadmin = user.role === "superadmin";
+
+  useEffect(() => {
+    function syncAdminPage() {
+      const page = window.location.hash.slice(1);
+      if (adminPageLinks.some(([id]) => id === page)) setAdminPage(page);
+    }
+    window.addEventListener("hashchange", syncAdminPage);
+    return () => window.removeEventListener("hashchange", syncAdminPage);
+  }, []);
 
   async function refreshDashboard() {
     const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
@@ -397,10 +416,17 @@ function Dashboard({ user, token, onLogout }) {
       <Notice notice={notice} />
       {admin && (
         <nav className="admin-dashboard-nav" aria-label="Admin dashboard navigation">
-          <a href="#admin-overview">Overview</a>
-          <a href="#admin-schedules">Schedules</a>
-          <a href="#admin-requests">Service requests{openRequestCount > 0 && <span>{openRequestCount}</span>}</a>
-          <a href="#admin-residents">Residents</a>
+          {adminPageLinks.map(([id, label]) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className={adminPage === id ? "active" : undefined}
+              aria-current={adminPage === id ? "page" : undefined}
+              onClick={() => setAdminPage(id)}
+            >
+              {label}{id === "admin-requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}
+            </a>
+          ))}
         </nav>
       )}
       {superadmin ? (
