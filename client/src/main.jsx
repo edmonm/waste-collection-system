@@ -207,6 +207,7 @@ function ResidentCalendar({ schedules, requests }) {
     eventsByDate.set(dateKey, [...(eventsByDate.get(dateKey) || []), { type: "collection", schedule }]);
   });
   requests.forEach((request) => {
+    if (request.status !== "approved" || !request.scheduledDate) return;
     const dateKey = request.scheduledDate.slice(0, 10);
     eventsByDate.set(dateKey, [...(eventsByDate.get(dateKey) || []), { type: "request", request }]);
   });
@@ -316,25 +317,70 @@ function AccountForm({ onSubmit, admin, residencies }) {
   );
 }
 
-function RequestCard({ request, onApprove, onDelete }) {
+function RequestCard({ request, onApprove, onDecline, onDelete }) {
   return (
     <article className="request-card">
-      <div className="request-meta"><span className={`status-pill ${request.status === "pending" ? "status-pending" : ""}`}>{request.status}</span><span>{new Date(request.createdAt).toLocaleDateString()}</span></div>
+      <div className="request-meta"><span className={`status-pill ${request.status === "pending" ? "status-pending" : request.status === "declined" ? "status-declined" : ""}`}>{request.status}</span><span>{new Date(request.createdAt).toLocaleDateString()}</span></div>
       <h3>{request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</h3>
       <p>{request.description}</p>
       <small>From {request.resident.name} · {request.resident.phone}</small>
       {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}</small>}
+      {request.status === "declined" && request.declineReason && <p className="request-decline-reason"><strong>Reason:</strong> {request.declineReason}</p>}
       {request.status === "pending" && (
-        <form className="request-approval-form" onSubmit={(event) => {
-          event.preventDefault();
-          onApprove(request._id, new FormData(event.currentTarget).get("scheduledDate"));
-        }}>
-          <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required /></label>
-          <button className="button button-small button-outline" type="submit">Approve request</button>
-        </form>
+        <div className="request-review-actions">
+          <form className="request-approval-form" onSubmit={(event) => {
+            event.preventDefault();
+            onApprove(request._id, new FormData(event.currentTarget).get("scheduledDate"));
+          }}>
+            <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required /></label>
+            <button className="button button-small button-outline" type="submit">Approve request</button>
+          </form>
+          <form className="request-decline-form" onSubmit={(event) => {
+            event.preventDefault();
+            onDecline(request._id, new FormData(event.currentTarget).get("declineReason"));
+          }}>
+            <label>Reason for declining<textarea name="declineReason" rows="2" maxLength="500" required placeholder="Explain why this request cannot be approved" /></label>
+            <button className="button button-small button-delete" type="submit">Decline request</button>
+          </form>
+        </div>
       )}
-      {onDelete && <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, request.kind === "missed_pickup" ? "Missed pickup" : "Special request")}>Delete request</button>}
+      {onDelete && request.status !== "pending" && (
+        <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, request.kind === "missed_pickup" ? "Missed pickup" : "Special request")}>Delete request</button>
+      )}
     </article>
+  );
+}
+
+function RequestMailbox({ requests }) {
+  return (
+    <section className="panel request-mailbox" id="resident-mailbox">
+      <div className="panel-heading">
+        <div><div className="eyebrow">YOUR REQUEST UPDATES</div><h2>Request mailbox</h2></div>
+        <span className="count-badge">{requests.length}</span>
+      </div>
+      {requests.length ? (
+        <div className="request-list">
+          {requests.map((request) => (
+            <article className="mailbox-message" key={request._id}>
+              <div className="request-meta">
+                <span className={`status-pill ${request.status === "pending" ? "status-pending" : request.status === "declined" ? "status-declined" : ""}`}>{request.status}</span>
+                <span>{new Date(request.updatedAt || request.createdAt).toLocaleDateString()}</span>
+              </div>
+              <h3>{request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</h3>
+              <p>{request.description}</p>
+              {request.status === "pending" && <p className="mailbox-update">Your request is waiting for admin review.</p>}
+              {request.status === "approved" && (
+                <p className="mailbox-update">
+                  Your request was approved{request.scheduledDate ? ` for ${dateKeyDate(request.scheduledDate).toLocaleDateString()}` : ""}.
+                </p>
+              )}
+              {request.status === "declined" && <p className="request-decline-reason"><strong>Admin's reason:</strong> {request.declineReason || "No reason was provided."}</p>}
+              {request.status === "reviewed" && <p className="mailbox-update">Your request has been reviewed.</p>}
+            </article>
+          ))}
+        </div>
+      ) : <div className="empty-state"><p>Your submitted requests and their updates will appear here.</p></div>}
+    </section>
   );
 }
 
@@ -526,6 +572,24 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
+  async function declineRequest(id, declineReason) {
+    setNotice(null);
+    try {
+      const result = await api(`/requests/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "declined", declineReason })
+      }, token);
+      await refreshDashboard();
+      setNotice({
+        message: result.notification.sent
+          ? "Request declined and resident notified by SMS."
+          : `Request declined. SMS was not sent: ${result.notification.reason}`
+      });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
   async function deleteSchedule(id, label) {
     if (!window.confirm(`Delete the collection schedule for "${label}"? Residents will no longer see it in their calendar.`)) return;
     setNotice(null);
@@ -596,7 +660,7 @@ function Dashboard({ user, token, onLogout }) {
                 </section>
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>View all</button></div>
-                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
             </section>
@@ -627,7 +691,7 @@ function Dashboard({ user, token, onLogout }) {
               </div>
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
               </div>
             </section>
           )}
@@ -647,7 +711,7 @@ function Dashboard({ user, token, onLogout }) {
             {admin ? (
               <div className="panel requests-panel" id="admin-requests">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
               </div>
             ) : (
               <div className="panel request-panel">
@@ -661,6 +725,7 @@ function Dashboard({ user, token, onLogout }) {
               </div>
             )}
           </section>
+          {!admin && <RequestMailbox requests={requests} />}
           {admin && <section className="management-grid admin-residents-section" id="admin-residents">
             <div className="panel">
               <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>

@@ -10,10 +10,10 @@ const createSchema = z.object({
   kind: z.enum(["special_request", "missed_pickup"]),
   description: z.string().trim().min(1).max(1000)
 });
-const updateSchema = z.object({
-  status: z.literal("approved"),
-  scheduledDate: z.iso.date()
-});
+const updateSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("approved"), scheduledDate: z.iso.date() }),
+  z.object({ status: z.literal("declined"), declineReason: z.string().trim().min(1).max(500) })
+]);
 
 router.use(authenticate);
 
@@ -41,10 +41,10 @@ router.get("/", requireAnyRole("admin", "superadmin", "user"), async (request, r
       ? {}
       : request.user.role === "admin"
         ? { residencyId: request.user.residencyId }
-        : { resident: request.user.id, residencyId: request.user.residencyId, status: "approved", scheduledDate: { $ne: null } };
+        : { resident: request.user.id, residencyId: request.user.residencyId };
     const requests = await ServiceRequest.find(filter)
       .populate("resident", "name phone email")
-      .sort(request.user.role === "user" ? { scheduledDate: 1 } : { createdAt: -1 })
+      .sort({ createdAt: -1 })
       .limit(200)
       .lean();
     return response.json({ requests });
@@ -55,7 +55,7 @@ router.get("/", requireAnyRole("admin", "superadmin", "user"), async (request, r
 
 router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
   try {
-    const { status, scheduledDate } = updateSchema.parse(request.body);
+    const decision = updateSchema.parse(request.body);
     if (!mongoose.isValidObjectId(request.params.id)) {
       return response.status(400).json({ error: "Invalid request identifier." });
     }
@@ -64,7 +64,9 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
       : { _id: request.params.id, residencyId: request.user.residencyId };
     const serviceRequest = await ServiceRequest.findOneAndUpdate(
       { ...filter, status: "pending" },
-      { status, scheduledDate: new Date(`${scheduledDate}T00:00:00.000Z`) },
+      decision.status === "approved"
+        ? { status: decision.status, scheduledDate: new Date(`${decision.scheduledDate}T00:00:00.000Z`), declineReason: "" }
+        : { status: decision.status, scheduledDate: null, declineReason: decision.declineReason },
       { new: true, runValidators: true }
     ).populate("resident", "name phone email");
     if (!serviceRequest) {
@@ -72,10 +74,15 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
       if (existingRequest) return response.status(409).json({ error: "This request has already been reviewed." });
       return response.status(404).json({ error: "Request not found." });
     }
-    const notification = await sendSms(
-      serviceRequest.resident.phone,
-      `GreenLoop approved your community collection request for ${scheduledDate}.`
-    );
+    const notification = decision.status === "approved"
+      ? await sendSms(
+        serviceRequest.resident.phone,
+        `GreenLoop approved your community collection request for ${decision.scheduledDate}.`
+      )
+      : await sendSms(
+        serviceRequest.resident.phone,
+        `GreenLoop declined your community collection request. Reason: ${decision.declineReason}`
+      );
     return response.json({ request: serviceRequest, notification });
   } catch (error) {
     return next(error);
