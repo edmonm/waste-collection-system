@@ -10,6 +10,18 @@ const adminPageLinks = [
   ["admin-residents", "Residents"]
 ];
 
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateKeyDate(dateKey) {
+  const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 async function api(path, options = {}, token = localStorage.getItem(tokenKey)) {
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -164,7 +176,7 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
 }
 
 function ScheduleCard({ schedule }) {
-  const date = new Date(schedule.date);
+  const date = dateKeyDate(schedule.date);
   return (
     <article className="schedule-card">
       <div className="date-block"><strong>{date.toLocaleDateString(undefined, { day: "2-digit" })}</strong><span>{date.toLocaleDateString(undefined, { month: "short" })}</span></div>
@@ -174,6 +186,93 @@ function ScheduleCard({ schedule }) {
         <p>{date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}{schedule.notes ? ` · ${schedule.notes}` : ""}</p>
       </div>
     </article>
+  );
+}
+
+function ResidentCalendar({ schedules, requests }) {
+  const today = new Date();
+  const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(localDateKey(today));
+  const eventsByDate = new Map();
+  schedules.forEach((schedule) => {
+    const dateKey = schedule.date.slice(0, 10);
+    eventsByDate.set(dateKey, [...(eventsByDate.get(dateKey) || []), { type: "collection", schedule }]);
+  });
+  requests.forEach((request) => {
+    const dateKey = request.scheduledDate.slice(0, 10);
+    eventsByDate.set(dateKey, [...(eventsByDate.get(dateKey) || []), { type: "request", request }]);
+  });
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const days = Array.from({ length: 42 }, (_, index) =>
+    new Date(month.getFullYear(), month.getMonth(), index - firstDay.getDay() + 1)
+  );
+  const dayEvents = eventsByDate.get(selectedDate) || [];
+  function moveMonth(offset) {
+    const nextMonth = new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    setMonth(nextMonth);
+    setSelectedDate(localDateKey(nextMonth));
+  }
+
+  return (
+    <section className="panel resident-calendar" aria-label="Collection calendar">
+      <div className="panel-heading">
+        <div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2></div>
+        <div className="calendar-controls">
+          <button type="button" className="calendar-month-button" aria-label="Previous month" onClick={() => moveMonth(-1)}>‹</button>
+          <button type="button" className="calendar-month-button" aria-label="Next month" onClick={() => moveMonth(1)}>›</button>
+        </div>
+      </div>
+      <div className="calendar-grid" role="grid" aria-label={month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}>
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((weekday) => <span className="calendar-weekday" role="columnheader" key={weekday}>{weekday}</span>)}
+        {days.map((date) => {
+          const dateKey = localDateKey(date);
+          const events = eventsByDate.get(dateKey) || [];
+          const inMonth = date.getMonth() === month.getMonth();
+          return (
+            <button
+              type="button"
+              role="gridcell"
+              key={dateKey}
+              className={`calendar-day${inMonth ? "" : " outside-month"}${selectedDate === dateKey ? " selected" : ""}${events.length ? " has-events" : ""}`}
+              aria-label={`${date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}${events.length ? `, ${events.filter((event) => event.type === "collection").length} collection schedule(s), ${events.filter((event) => event.type === "request").length} approved request(s)` : ", no scheduled items"}`}
+              aria-pressed={selectedDate === dateKey}
+              onClick={() => {
+                setSelectedDate(dateKey);
+                if (!inMonth) setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+              }}
+            >
+              <span>{date.getDate()}</span>
+              {events.length > 0 && (
+                <span className="calendar-day-indicators" aria-hidden="true">
+                  {events.some((event) => event.type === "collection") && <i className="collection-indicator" />}
+                  {events.some((event) => event.type === "request") && <i className="request-indicator" />}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="calendar-legend" aria-label="Calendar indicators">
+        <span><i className="collection-indicator" />Collection schedule</span>
+        <span><i className="request-indicator" />Approved request</span>
+      </div>
+      <div className="calendar-day-details" aria-live="polite">
+        <h3>{dateKeyDate(selectedDate).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
+        {dayEvents.length ? dayEvents.map((event) => event.type === "collection" ? (
+          <article className="calendar-event" key={`schedule-${event.schedule._id}`}>
+            <span className="status-pill">{event.schedule.wasteType}</span>
+            <strong>Collection · {event.schedule.area}</strong>
+            {event.schedule.notes && <p>{event.schedule.notes}</p>}
+          </article>
+        ) : (
+          <article className="calendar-event approved-request-event" key={`request-${event.request._id}`}>
+            <span className="status-pill">Approved request</span>
+            <strong>{event.request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</strong>
+            <p>{event.request.description}</p>
+          </article>
+        )) : <p className="calendar-no-events">No collections or approved requests for this day.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -205,14 +304,23 @@ function AccountForm({ onSubmit, admin, residencies }) {
   );
 }
 
-function RequestCard({ request, onReview }) {
+function RequestCard({ request, onApprove }) {
   return (
     <article className="request-card">
       <div className="request-meta"><span className={`status-pill ${request.status === "pending" ? "status-pending" : ""}`}>{request.status}</span><span>{new Date(request.createdAt).toLocaleDateString()}</span></div>
       <h3>{request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</h3>
       <p>{request.description}</p>
       <small>From {request.resident.name} · {request.resident.phone}</small>
-      {request.status === "pending" && <button className="button button-small button-outline" type="button" onClick={() => onReview(request._id)}>Mark reviewed</button>}
+      {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}</small>}
+      {request.status === "pending" && (
+        <form className="request-approval-form" onSubmit={(event) => {
+          event.preventDefault();
+          onApprove(request._id, new FormData(event.currentTarget).get("scheduledDate"));
+        }}>
+          <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required /></label>
+          <button className="button button-small button-outline" type="submit">Approve request</button>
+        </form>
+      )}
     </article>
   );
 }
@@ -245,7 +353,7 @@ function Dashboard({ user, token, onLogout }) {
   async function refreshDashboard() {
     const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
       api("/schedules", {}, token),
-      admin || superadmin ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+      admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
       admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
       superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
     ]);
@@ -261,7 +369,7 @@ function Dashboard({ user, token, onLogout }) {
       try {
         const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
           api("/schedules", {}, token),
-          admin || superadmin ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+          admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
           admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
           superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
         ]);
@@ -387,18 +495,18 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
-  async function reviewRequest(id) {
+  async function approveRequest(id, scheduledDate) {
     setNotice(null);
     try {
       const result = await api(`/requests/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: "reviewed" })
+        body: JSON.stringify({ status: "approved", scheduledDate })
       }, token);
       await refreshDashboard();
       setNotice({
         message: result.notification.sent
-          ? "Request marked as reviewed and resident notified by SMS."
-          : `Request marked as reviewed. SMS was not sent: ${result.notification.reason}`
+          ? "Request approved and resident notified by SMS."
+          : `Request approved. SMS was not sent: ${result.notification.reason}`
       });
     } catch (error) {
       setNotice({ message: error.message, isError: true });
@@ -451,7 +559,7 @@ function Dashboard({ user, token, onLogout }) {
                 </section>
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>View all</button></div>
-                  {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
             </section>
@@ -482,7 +590,7 @@ function Dashboard({ user, token, onLogout }) {
               </div>
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
               </div>
             </section>
           )}
@@ -490,17 +598,19 @@ function Dashboard({ user, token, onLogout }) {
       ) : (
         <>
           <section className="dashboard-grid" id={admin ? "admin-overview" : undefined}>
-            <div className="panel schedule-panel" id={admin ? "admin-schedules" : undefined}>
-              <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{admin ? "Manage schedules" : "Upcoming collections"}</h2></div><span className="count-badge">{schedules.length}</span></div>
-              {admin && <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin />}
-              <div className="schedule-list">
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+            {admin ? (
+              <div className="panel schedule-panel" id="admin-schedules">
+                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage schedules</h2></div><span className="count-badge">{schedules.length}</span></div>
+                <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin />
+                <div className="schedule-list">
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                </div>
               </div>
-            </div>
+            ) : <ResidentCalendar schedules={schedules} requests={requests} />}
             {admin ? (
               <div className="panel requests-panel" id="admin-requests">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
               </div>
             ) : (
               <div className="panel request-panel">
