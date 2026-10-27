@@ -102,7 +102,7 @@ After the app is running:
 1. On the sign-in page, choose **Login** and sign in with the superadmin email and password from `.env`.
 2. In the superadmin dashboard, create a **residency**.
 3. Create an **Admin** account and assign it to that residency. The admin can manage residents, schedules, and service requests only for its assigned residency.
-4. Residents can create accounts from the public **Register** option and select an active residency. Each resident sees schedules for their own residency and receives schedule SMS notifications when Twilio is configured.
+4. Admins can create user accounts and assign them to their residency. Each user sees schedules for their own residency and receives schedule SMS notifications when Twilio is configured.
 5. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
@@ -113,9 +113,9 @@ There are three account types:
 | **Admin** | Manage residents, schedules, and service requests in the admin's assigned residency. |
 | **User (resident)** | View their own residency's collection schedules, receive schedule notifications when SMS is enabled, and submit service requests. |
 
-Public registration creates resident accounts only. Admins are created by a superadmin.
+Only admins and superadmins can create accounts. Admins can create users for their assigned residency; superadmins can create admins or users.
 
-Accounts created by an admin or superadmin receive the temporary password `11111111`. On first login, the account holder must choose a new password before the dashboard or any protected features are available. Public resident registration continues to let residents choose their own password.
+Accounts created by an admin or superadmin receive the temporary password `11111111`. On first login, the account holder must choose a new password before the dashboard or any protected features are available.
 
 ## Everyday commands
 
@@ -182,8 +182,6 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | Method | Endpoint | Access | Purpose |
 | --- | --- | --- | --- |
 | GET | `/api/health` | Public | Check that the API is responding. |
-| GET | `/api/auth/residencies` | Public | List active residencies for resident registration. |
-| POST | `/api/auth/register` | Public | Register a resident. |
 | POST | `/api/auth/login` | Public | Sign in; the account type is identified automatically. |
 | GET | `/api/auth/me` | Signed in | Get the current account. |
 | GET/POST | `/api/residencies` | Superadmin | List or create residencies. |

@@ -6,17 +6,8 @@ import { config } from "../config.js";
 import { User } from "../models/User.js";
 import { Residency } from "../models/Residency.js";
 import { authenticate } from "../middleware/auth.js";
-import { philippinesMobileMessage, philippinesMobilePattern } from "../constants.js";
 
 const router = Router();
-const phoneSchema = z.string().regex(philippinesMobilePattern, philippinesMobileMessage);
-const registerSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  email: z.string().trim().email().max(254),
-  phone: phoneSchema,
-  password: z.string().min(8).max(72),
-  residencyId: z.string().regex(/^[a-f\d]{24}$/i, "Choose a valid residency.")
-});
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(72),
@@ -46,36 +37,6 @@ function publicUser(user) {
     residencyName: user.residencyId?.name || null
   };
 }
-
-router.get("/residencies", async (_request, response, next) => {
-  try {
-    const residencies = await Residency.find({ active: true }).select("name").sort({ name: 1 }).lean();
-    return response.json({ residencies });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post("/register", async (request, response, next) => {
-  try {
-    const input = registerSchema.parse(request.body);
-    const residency = await Residency.findOne({ _id: input.residencyId, active: true });
-    if (!residency) return response.status(400).json({ error: "Choose an active residency." });
-    const passwordHash = await bcrypt.hash(input.password, 12);
-    const user = await User.create({
-      ...input,
-      email: input.email.toLowerCase(),
-      passwordHash,
-      role: "user",
-      mustChangePassword: false,
-      residencyId: residency._id
-    });
-    return response.status(201).json({ token: issueToken(user), user: publicUser(user) });
-  } catch (error) {
-    if (error.code === 11000) return response.status(409).json({ error: "An account with that email already exists." });
-    return next(error);
-  }
-});
 
 router.post("/login", async (request, response, next) => {
   try {

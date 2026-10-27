@@ -32,21 +32,12 @@ function Notice({ notice }) {
 }
 
 function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordChange, passwordChange, initialNotice = null }) {
-  const [mode, setMode] = useState("login");
-  const [residencies, setResidencies] = useState([]);
-  const [fields, setFields] = useState({ name: "", email: "", phone: "", password: "" });
+  const [fields, setFields] = useState({ email: "", password: "" });
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [focusedField, setFocusedField] = useState(null);
   const [notice, setNotice] = useState(initialNotice ? { message: initialNotice, isError: true } : null);
   const [submitting, setSubmitting] = useState(false);
-  const registering = mode === "register";
-
-  useEffect(() => {
-    api("/auth/residencies", {}, null)
-      .then((result) => setResidencies(result.residencies))
-      .catch((error) => setNotice({ message: error.message, isError: true }));
-  }, []);
 
   async function submitAuth(event) {
     event.preventDefault();
@@ -54,7 +45,7 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
     setNotice(null);
     const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const result = await api(`/auth/${registering ? "register" : "login"}`, {
+      const result = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify(data)
       }, null);
@@ -91,13 +82,6 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function changeMode(nextMode) {
-    setMode(nextMode);
-    setFields({ name: "", email: "", phone: "", password: "" });
-    setFocusedField(null);
-    setNotice(null);
   }
 
   function updateField(event) {
@@ -156,23 +140,15 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
         </div>
         <div className="auth-card">
           <div className="auth-card-heading">
-            <div className="eyebrow">{registering ? "JOIN YOUR COMMUNITY" : "WELCOME BACK"}</div>
-            <h2>{registering ? "Create your account" : "Sign in to GreenLoop"}</h2>
-            <p>{registering ? "Register as a resident to get started." : "Enter your details to continue to your account."}</p>
-          </div>
-          <div className="tabs auth-tabs" role="tablist" aria-label="Account access">
-            <button className={`tab ${!registering ? "active" : ""}`} type="button" role="tab" aria-selected={!registering} onClick={() => changeMode("login")}>Login</button>
-            <button className={`tab ${registering ? "active" : ""}`} type="button" role="tab" aria-selected={registering} onClick={() => changeMode("register")}>Register</button>
+            <div className="eyebrow">WELCOME BACK</div>
+            <h2>Sign in to GreenLoop</h2>
+            <p>Enter your details to continue to your account.</p>
           </div>
           <Notice notice={notice} />
           <form className="form-grid" onSubmit={submitAuth} autoComplete="off">
-            {registering && <label>Full name<input name="name" autoComplete="off" value={fields.name} onChange={updateField} readOnly={focusedField !== "name"} onFocus={() => setFocusedField("name")} required maxLength="80" /></label>}
             <label>Email address<input name="email" type="email" autoComplete="off" value={fields.email} onChange={updateField} readOnly={focusedField !== "email"} onFocus={() => setFocusedField("email")} required /></label>
-            {registering && <label>Mobile number<input name="phone" type="tel" autoComplete="off" value={fields.phone} onChange={updateField} readOnly={focusedField !== "phone"} onFocus={() => setFocusedField("phone")} required /><small>Use Philippine format with +63 country code (for example, +639171234567).</small></label>}
-            {registering && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select your residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select>{residencies.length === 0 && <small>There are no active residencies yet. Contact the system administrator.</small>}</label>}
-            <label>Password<input name="password" type="password" autoComplete="new-password" value={fields.password} onChange={updateField} readOnly={focusedField !== "password"} onFocus={() => setFocusedField("password")} required minLength="8" /></label>
-            <button className="button button-dark button-full" type="submit" disabled={submitting || (registering && residencies.length === 0)}>{submitting ? "Please wait..." : registering ? "Create resident account" : "Login"} <span aria-hidden="true">↗</span></button>
-            {registering && <p className="form-footnote">Resident accounts are assigned to one residency.</p>}
+            <label>Password<input name="password" type="password" autoComplete="current-password" value={fields.password} onChange={updateField} readOnly={focusedField !== "password"} onFocus={() => setFocusedField("password")} required minLength="8" /></label>
+            <button className="button button-dark button-full" type="submit" disabled={submitting}>{submitting ? "Please wait..." : "Login"} <span aria-hidden="true">↗</span></button>
           </form>
         </div>
       </section>
@@ -419,6 +395,14 @@ function Dashboard({ user, token, onLogout }) {
       <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{superadmin ? "SUPERADMIN" : admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
       <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
+      {admin && (
+        <nav className="admin-dashboard-nav" aria-label="Admin dashboard navigation">
+          <a href="#admin-overview">Overview</a>
+          <a href="#admin-schedules">Schedules</a>
+          <a href="#admin-requests">Service requests{openRequestCount > 0 && <span>{openRequestCount}</span>}</a>
+          <a href="#admin-residents">Residents</a>
+        </nav>
+      )}
       {superadmin ? (
         <>
           <nav className="admin-section-tabs" aria-label="Superadmin sections">
@@ -479,8 +463,8 @@ function Dashboard({ user, token, onLogout }) {
         </>
       ) : (
         <>
-          <section className="dashboard-grid">
-            <div className="panel schedule-panel">
+          <section className="dashboard-grid" id={admin ? "admin-overview" : undefined}>
+            <div className="panel schedule-panel" id={admin ? "admin-schedules" : undefined}>
               <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>{admin ? "Manage schedules" : "Upcoming collections"}</h2></div><span className="count-badge">{schedules.length}</span></div>
               {admin && <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin />}
               <div className="schedule-list">
@@ -488,7 +472,7 @@ function Dashboard({ user, token, onLogout }) {
               </div>
             </div>
             {admin ? (
-              <div className="panel requests-panel">
+              <div className="panel requests-panel" id="admin-requests">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
                 <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onReview={reviewRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
               </div>
@@ -504,7 +488,7 @@ function Dashboard({ user, token, onLogout }) {
               </div>
             )}
           </section>
-          {admin && <section className="management-grid">
+          {admin && <section className="management-grid admin-residents-section" id="admin-residents">
             <div className="panel">
               <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
               <AccountForm onSubmit={createAccount} admin residencies={residencies} />
