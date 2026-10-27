@@ -5,7 +5,7 @@ import "./style.css";
 const tokenKey = "greenloop-token";
 const adminPageLinks = [
   ["admin-overview", "Overview"],
-  ["admin-schedules", "Schedules"],
+  ["admin-schedules", "Collections"],
   ["admin-requests", "Service requests"],
   ["admin-residents", "Residents"]
 ];
@@ -20,6 +20,12 @@ function localDateKey(date) {
 function dateKeyDate(dateKey) {
   const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function formatArrivalTime(time) {
+  if (!time) return "Not provided";
+  const [hours, minutes] = time.split(":").map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 async function api(path, options = {}, token = localStorage.getItem(tokenKey)) {
@@ -262,6 +268,7 @@ function ResidentCalendar({ schedules, requests }) {
           <article className="calendar-event" key={`schedule-${event.schedule._id}`}>
             <span className="status-pill">{event.schedule.wasteType}</span>
             <strong>Collection · {event.schedule.area}</strong>
+            <p>Estimated arrival: {formatArrivalTime(event.schedule.estimatedArrivalTime)}</p>
             {event.schedule.notes && <p>{event.schedule.notes}</p>}
           </article>
         ) : (
@@ -276,12 +283,15 @@ function ResidentCalendar({ schedules, requests }) {
   );
 }
 
-function ScheduleForm({ onSubmit, residencies = [], admin = false }) {
+function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName = "" }) {
   return (
     <form className="inline-form" onSubmit={onSubmit}>
-      {!admin && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
+      {admin
+        ? <div className="schedule-residency-context"><span>Residency</span><strong>{residencyName || "Your assigned residency"}</strong></div>
+        : <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
       <label>Collection area<input name="area" required maxLength="100" placeholder="e.g. North District" /></label>
       <label>Collection date<input name="date" type="date" required /></label>
+      <label>Estimated arrival time<input name="estimatedArrivalTime" type="time" required /></label>
       <label>Waste type<select name="wasteType" required><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
       <label>Notes (optional)<input name="notes" maxLength="300" placeholder="Collection details" /></label>
       <button className="button button-dark" type="submit">Publish schedule ↗</button>
@@ -584,7 +594,7 @@ function Dashboard({ user, token, onLogout }) {
           {superadminView === "collections" && (
             <section className="superadmin-content dashboard-grid superadmin-operations">
               <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage schedules</h2></div><span className="count-badge">{schedules.length}</span></div>
+                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
                 {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
@@ -597,11 +607,11 @@ function Dashboard({ user, token, onLogout }) {
         </>
       ) : (
         <>
-          <section className="dashboard-grid" id={admin ? "admin-overview" : undefined}>
+          <section className={`dashboard-grid${admin ? " admin-operations" : ""}`} id={admin ? "admin-overview" : undefined}>
             {admin ? (
               <div className="panel schedule-panel" id="admin-schedules">
-                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage schedules</h2></div><span className="count-badge">{schedules.length}</span></div>
-                <ScheduleForm onSubmit={submitSchedule} residencies={residencies} admin />
+                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
+                <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
                 <div className="schedule-list">
                   {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
                 </div>

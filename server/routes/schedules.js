@@ -9,6 +9,7 @@ const router = Router();
 const scheduleSchema = z.object({
   area: z.string().trim().min(2).max(100),
   date: z.iso.datetime().or(z.iso.date()),
+  estimatedArrivalTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   wasteType: z.enum(["General waste", "Recycling", "Green waste", "Bulk collection"]),
   notes: z.string().trim().max(300).optional().default(""),
   residencyId: z.string().regex(/^[a-f\d]{24}$/i).optional()
