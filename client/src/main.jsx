@@ -9,6 +9,11 @@ const adminPageLinks = [
   ["admin-requests", "Service requests"],
   ["admin-residents", "Residents"]
 ];
+const residentPageLinks = [
+  ["resident-overview", "Overview"],
+  ["resident-collections", "Collections"],
+  ["resident-requests", "Service requests"]
+];
 
 function localDateKey(date) {
   const year = date.getFullYear();
@@ -384,6 +389,20 @@ function RequestMailbox({ requests }) {
   );
 }
 
+function ResidentRequestPanel({ onSubmit, submitting }) {
+  return (
+    <div className="panel request-panel">
+      <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
+      <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
+      <form className="form-grid" onSubmit={onSubmit}>
+        <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
+        <label>Details<textarea name="description" required maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
+        <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request ↗"}</button>
+      </form>
+    </div>
+  );
+}
+
 function Dashboard({ user, token, onLogout }) {
   const [schedules, setSchedules] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -393,21 +412,13 @@ function Dashboard({ user, token, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
+  const [residentPage, setResidentPage] = useState("resident-overview");
   const [adminPage, setAdminPage] = useState(() => {
     const page = window.location.hash.slice(1);
-    return adminPageLinks.some(([id]) => id === page) ? page : "admin-overview";
+    return adminPageLinks.some(([id]) => id === page) ? page : "admin-schedules";
   });
   const admin = user.role === "admin";
   const superadmin = user.role === "superadmin";
-
-  useEffect(() => {
-    function syncAdminPage() {
-      const page = window.location.hash.slice(1);
-      if (adminPageLinks.some(([id]) => id === page)) setAdminPage(page);
-    }
-    window.addEventListener("hashchange", syncAdminPage);
-    return () => window.removeEventListener("hashchange", syncAdminPage);
-  }, []);
 
   async function refreshDashboard() {
     const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
@@ -623,26 +634,29 @@ function Dashboard({ user, token, onLogout }) {
       <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{superadmin ? "SUPERADMIN" : admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
       <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
-      {admin && (
-        <nav className="admin-dashboard-nav" aria-label="Admin dashboard navigation">
-          {adminPageLinks.map(([id, label]) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className={adminPage === id ? "active" : undefined}
-              aria-current={adminPage === id ? "page" : undefined}
-              onClick={() => setAdminPage(id)}
-            >
-              {label}{id === "admin-requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}
-            </a>
-          ))}
+      {!superadmin && (
+        <nav className="dashboard-tabs" aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}>
+          {(admin ? adminPageLinks : residentPageLinks).map(([id, label]) => {
+            const selected = (admin ? adminPage : residentPage) === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`dashboard-tab${selected ? " active" : ""}`}
+                aria-current={selected ? "page" : undefined}
+                onClick={() => admin ? setAdminPage(id) : setResidentPage(id)}
+              >
+                {label}{id === "admin-requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}
+              </button>
+            );
+          })}
         </nav>
       )}
       {superadmin ? (
         <>
-          <nav className="admin-section-tabs" aria-label="Superadmin sections">
+          <nav className="dashboard-tabs" aria-label="Superadmin sections">
             {[["overview", "Overview"], ["residencies", "Residencies"], ["accounts", "Accounts"], ["collections", "Collections"]].map(([view, label]) => (
-              <button key={view} type="button" className={`admin-section-tab ${superadminView === view ? "active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}</button>
+              <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}</button>
             ))}
           </nav>
           {superadminView === "overview" && (
@@ -696,43 +710,76 @@ function Dashboard({ user, token, onLogout }) {
             </section>
           )}
         </>
-      ) : (
+      ) : admin ? (
         <>
-          <section className={`dashboard-grid${admin ? " admin-operations" : ""}`} id={admin ? "admin-overview" : undefined}>
-            {admin ? (
-              <div className="panel schedule-panel" id="admin-schedules">
+          {adminPage === "admin-overview" && (
+            <section className="superadmin-content">
+              <div className="overview-stats admin-overview-stats">
+                <article className="overview-stat"><span>Residents</span><strong>{residentCount}</strong><small>In your residency</small></article>
+                <article className="overview-stat"><span>Collection schedules</span><strong>{schedules.length}</strong><small>Currently published</small></article>
+                <article className="overview-stat"><span>Open requests</span><strong>{openRequestCount}</strong><small>Awaiting review</small></article>
+              </div>
+              <div className="dashboard-grid superadmin-overview-grid">
+                <section className="panel">
+                  <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Upcoming collections</h2></div><button className="text-action" type="button" onClick={() => setAdminPage("admin-schedules")}>Manage</button></div>
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                </section>
+                <section className="panel">
+                  <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setAdminPage("admin-requests")}>View all</button></div>
+                  {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                </section>
+              </div>
+            </section>
+          )}
+          {adminPage === "admin-schedules" && (
+            <section className="dashboard-grid admin-operations">
+              <div className="panel schedule-panel">
                 <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
                 <div className="schedule-list">
                   {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
                 </div>
               </div>
-            ) : <ResidentCalendar schedules={schedules} requests={requests} />}
-            {admin ? (
-              <div className="panel requests-panel" id="admin-requests">
+              <div className="panel requests-panel">
                 <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
                 <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
               </div>
-            ) : (
-              <div className="panel request-panel">
-                <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
-                <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
-                <form className="form-grid" onSubmit={submitRequest}>
-                  <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
-                  <label>Details<textarea name="description" required maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
-                  <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request ↗"}</button>
-                </form>
+            </section>
+          )}
+          {adminPage === "admin-requests" && (
+            <section className="panel admin-request-content">
+              <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
+              <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+            </section>
+          )}
+          {adminPage === "admin-residents" && (
+            <section className="management-grid admin-residents-section">
+              <div className="panel">
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
+                <AccountForm onSubmit={createAccount} admin residencies={residencies} />
+                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account above.</p></div>}
               </div>
-            )}
-          </section>
-          {!admin && <RequestMailbox requests={requests} />}
-          {admin && <section className="management-grid admin-residents-section" id="admin-residents">
-            <div className="panel">
-              <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
-              <AccountForm onSubmit={createAccount} admin residencies={residencies} />
-              <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div>
-            </div>
-          </section>}
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          {residentPage === "resident-overview" && (
+            <>
+              <section className="dashboard-grid">
+                <ResidentCalendar schedules={schedules} requests={requests} />
+                <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
+              </section>
+              <RequestMailbox requests={requests} />
+            </>
+          )}
+          {residentPage === "resident-collections" && <ResidentCalendar schedules={schedules} requests={requests} />}
+          {residentPage === "resident-requests" && (
+            <section className="dashboard-grid">
+              <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
+              <RequestMailbox requests={requests} />
+            </section>
+          )}
         </>
       )}
       <Footer />

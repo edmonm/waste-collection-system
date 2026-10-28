@@ -107,11 +107,14 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
   .auth-header-note { font-size: 8px; letter-spacing: .8px; }
   .auth-card { padding: 18px; }
 }
-.admin-section-tabs { display: flex; gap: 5px; padding: 5px; margin: 0 0 20px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
-.admin-section-tab { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 10px 16px; background: transparent; color: #788174; font-size: 11px; font-weight: 600; cursor: pointer; }
-.admin-section-tab:hover { color: #304f3a; background: #f7f9f5; }
-.admin-section-tab.active { color: #fff; background: #304f3a; }
+.dashboard-tabs { display: flex; gap: 5px; padding: 5px; margin: 0 0 18px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
+.dashboard-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 7px; padding: 9px 13px; background: transparent; color: #64705f; font-size: 10px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+.dashboard-tab:hover, .dashboard-tab:focus-visible { background: #eff4e9; color: #304f3a; outline: none; }
+.dashboard-tab.active, .dashboard-tab.active:hover { background: #304f3a; color: #fff; }
+.dashboard-tab span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
+.dashboard-tab.active span { background: #fff; color: #304f3a; }
 .superadmin-content { margin-bottom: 20px; }
+.admin-overview-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .overview-stat { display: grid; gap: 7px; padding: 17px; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
 .overview-stat span, .overview-stat small { color: #788174; font-size: 10px; }
@@ -134,13 +137,8 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .management-password-note { grid-column: 1 / -1; line-height: 1.6; }
 .management-password-note strong { color: #405c3a; }
 .password-change-layout { grid-template-columns: 1fr minmax(340px, .82fr); }
-.admin-dashboard-nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 5px; padding: 6px; margin: 0 0 18px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #ffffffed; box-shadow: 0 5px 16px #304f3a0a; backdrop-filter: blur(8px); }
-.admin-dashboard-nav a { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 7px; color: #64705f; font-size: 10px; font-weight: 700; transition: background .15s, color .15s; }
-.admin-dashboard-nav a:hover, .admin-dashboard-nav a:focus-visible { background: #eff4e9; color: #304f3a; outline: none; }
-.admin-dashboard-nav a.active, .admin-dashboard-nav a.active:hover { background: #304f3a; color: #fff; }
-.admin-dashboard-nav a span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
-.admin-dashboard-nav a.active span { background: #fff; color: #304f3a; }
-.admin-dashboard-nav ~ .dashboard-grid > .panel, .admin-residents-section { scroll-margin-top: 70px; }
+.admin-residents-section { margin-top: 0; }
+.admin-request-content { margin-bottom: 20px; }
 .resident-calendar { min-width: 0; }
 .calendar-controls { display: flex; gap: 5px; }
 .calendar-month-button { width: 30px; height: 30px; border: 1px solid #e6eae2; border-radius: 7px; background: #fff; color: #405c3a; font-size: 20px; line-height: 1; cursor: pointer; }
@@ -171,12 +169,11 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 @media (max-width: 760px) {
   .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .overview-stat { padding: 13px; }
-  .admin-section-tabs { margin-bottom: 14px; }
-  .admin-section-tab { padding: 9px 13px; }
+  .dashboard-tabs { margin-bottom: 14px; }
+  .dashboard-tab { padding: 9px 11px; }
   .residency-create-form { align-items: stretch; flex-direction: column; }
   .residency-create-form .button { align-self: flex-start; }
   .password-change-layout { grid-template-columns: 1fr; }
-  .admin-dashboard-nav { margin-bottom: 14px; }
-  .admin-dashboard-nav a { padding: 9px 11px; }
+  .admin-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .request-review-actions { grid-template-columns: 1fr; }
 }
