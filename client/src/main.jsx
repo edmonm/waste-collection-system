@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
@@ -6,13 +6,13 @@ const tokenKey = "greenloop-token";
 const adminPageLinks = [
   ["admin-overview", "Overview"],
   ["admin-schedules", "Collections"],
-  ["admin-requests", "Service requests"],
+  ["admin-requests", "Request"],
   ["admin-residents", "Residents"]
 ];
 const residentPageLinks = [
   ["resident-overview", "Overview"],
   ["resident-collections", "Collections"],
-  ["resident-requests", "Service requests"]
+  ["resident-requests", "Request"]
 ];
 
 function localDateKey(date) {
@@ -323,35 +323,105 @@ function AccountForm({ onSubmit, admin, residencies }) {
 }
 
 function RequestCard({ request, onApprove, onDecline, onDelete }) {
+  const [decision, setDecision] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
+  const [decisionError, setDecisionError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const dialogRef = useRef(null);
+  const requestLabel = request.kind === "missed_pickup" ? "Missed pickup" : "Special request";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (decision && !dialog.open) dialog.showModal();
+    if (!decision && dialog.open) dialog.close();
+  }, [decision]);
+
+  function closeDialog() {
+    setDecision(null);
+    setConfirmation(null);
+    setDecisionError("");
+  }
+
+  async function confirmDecision() {
+    setSubmitting(true);
+    const succeeded = confirmation.type === "approve"
+      ? await onApprove(request._id, confirmation.scheduledDate)
+      : await onDecline(request._id, confirmation.declineReason);
+    setSubmitting(false);
+    if (succeeded === true) closeDialog();
+    else setDecisionError(succeeded || "The request could not be updated. Please try again.");
+  }
+
   return (
     <article className="request-card">
       <div className="request-meta"><span className={`status-pill ${request.status === "pending" ? "status-pending" : request.status === "declined" ? "status-declined" : ""}`}>{request.status}</span><span>{new Date(request.createdAt).toLocaleDateString()}</span></div>
-      <h3>{request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</h3>
+      <h3>{requestLabel}</h3>
       <p>{request.description}</p>
       <small>From {request.resident.name} · {request.resident.phone}</small>
       {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}</small>}
       {request.status === "declined" && request.declineReason && <p className="request-decline-reason"><strong>Reason:</strong> {request.declineReason}</p>}
       {request.status === "pending" && (
         <div className="request-review-actions">
-          <form className="request-approval-form" onSubmit={(event) => {
-            event.preventDefault();
-            onApprove(request._id, new FormData(event.currentTarget).get("scheduledDate"));
-          }}>
-            <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required /></label>
-            <button className="button button-small button-outline" type="submit">Approve request</button>
-          </form>
-          <form className="request-decline-form" onSubmit={(event) => {
-            event.preventDefault();
-            onDecline(request._id, new FormData(event.currentTarget).get("declineReason"));
-          }}>
-            <label>Reason for declining<textarea name="declineReason" rows="2" maxLength="500" required placeholder="Explain why this request cannot be approved" /></label>
-            <button className="button button-small button-delete" type="submit">Decline request</button>
-          </form>
+          <button className="button button-small button-outline" type="button" onClick={() => { setDecisionError(""); setDecision("approve"); }}>Approve</button>
+          <button className="button button-small button-delete" type="button" onClick={() => { setDecisionError(""); setDecision("decline"); }}>Decline</button>
         </div>
       )}
       {onDelete && request.status !== "pending" && (
-        <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, request.kind === "missed_pickup" ? "Missed pickup" : "Special request")}>Delete request</button>
+        <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, requestLabel)}>Delete request</button>
       )}
+      <dialog
+        ref={dialogRef}
+        className="request-decision-dialog"
+        aria-labelledby={`request-dialog-title-${request._id}`}
+        onClose={closeDialog}
+      >
+        {decision && (
+          <>
+            <div className="request-dialog-heading">
+              <div>
+                <div className="eyebrow">REVIEW REQUEST</div>
+                <h2 id={`request-dialog-title-${request._id}`}>{confirmation ? `Confirm ${confirmation.type === "approve" ? "approval" : "decline"}` : `${decision === "approve" ? "Approve" : "Decline"} request`}</h2>
+              </div>
+              <button className="request-dialog-close" type="button" aria-label="Close dialog" onClick={closeDialog}>×</button>
+            </div>
+            <p className="request-dialog-summary"><strong>{requestLabel}</strong> from {request.resident.name}</p>
+            {decisionError && <p className="request-dialog-error" role="alert">{decisionError}</p>}
+            {confirmation ? (
+              <div className={`request-confirmation ${confirmation.type === "decline" ? "request-confirmation-decline" : ""}`}>
+                <p>
+                  {confirmation.type === "approve"
+                    ? `Approve this request and schedule collection for ${dateKeyDate(confirmation.scheduledDate).toLocaleDateString()}?`
+                    : `Decline this request with the reason: “${confirmation.declineReason}”`}
+                </p>
+                <p>The resident will be notified by SMS. Please confirm that this decision is correct.</p>
+                <div className="request-dialog-actions">
+                  <button className="button button-small button-outline" type="button" onClick={() => setConfirmation(null)} disabled={submitting}>Go back</button>
+                  <button className={`button button-small ${confirmation.type === "approve" ? "button-dark" : "button-delete"}`} type="button" onClick={confirmDecision} disabled={submitting}>
+                    {submitting ? "Submitting..." : `Confirm ${confirmation.type === "approve" ? "approval" : "decline"}`}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className="request-dialog-form" onSubmit={(event) => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                setConfirmation(decision === "approve"
+                  ? { type: "approve", scheduledDate: data.get("scheduledDate") }
+                  : { type: "decline", declineReason: data.get("declineReason") });
+              }}>
+                {decision === "approve"
+                  ? <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required autoFocus /></label>
+                  : <label>Reason for declining<textarea name="declineReason" rows="4" maxLength="500" required autoFocus placeholder="Explain why this request cannot be approved" /></label>}
+                <p className="request-dialog-hint">You will be asked to confirm before this decision is sent to the resident.</p>
+                <div className="request-dialog-actions">
+                  <button className="button button-small button-outline" type="button" onClick={closeDialog}>Cancel</button>
+                  <button className={`button button-small ${decision === "approve" ? "button-dark" : "button-delete"}`} type="submit">Submit {decision === "approve" ? "approval" : "decline"}</button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
+      </dialog>
     </article>
   );
 }
@@ -494,8 +564,8 @@ function Dashboard({ user, token, onLogout }) {
       await refreshDashboard();
       setNotice({
         message: result.notification.sent
-          ? "Your request was sent. A confirmation SMS is on its way."
-          : `Your request was sent. SMS confirmation was not delivered: ${result.notification.reason}`
+          ? "Your request was submitted and is pending review. It has not been approved yet. A confirmation SMS is on its way."
+          : `Your request was submitted and is pending review. It has not been approved yet. SMS confirmation was not delivered: ${result.notification.reason}`
       });
       form.reset();
     } catch (error) {
@@ -578,8 +648,10 @@ function Dashboard({ user, token, onLogout }) {
           ? "Request approved and resident notified by SMS."
           : `Request approved. SMS was not sent: ${result.notification.reason}`
       });
+      return true;
     } catch (error) {
       setNotice({ message: error.message, isError: true });
+      return error.message;
     }
   }
 
@@ -596,8 +668,10 @@ function Dashboard({ user, token, onLogout }) {
           ? "Request declined and resident notified by SMS."
           : `Request declined. SMS was not sent: ${result.notification.reason}`
       });
+      return true;
     } catch (error) {
       setNotice({ message: error.message, isError: true });
+      return error.message;
     }
   }
 
@@ -655,8 +729,8 @@ function Dashboard({ user, token, onLogout }) {
       {superadmin ? (
         <>
           <nav className="dashboard-tabs" aria-label="Superadmin sections">
-            {[["overview", "Overview"], ["residencies", "Residencies"], ["accounts", "Accounts"], ["collections", "Collections"]].map(([view, label]) => (
-              <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}</button>
+            {[["overview", "Overview"], ["residencies", "Residencies"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
+              <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}{view === "requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}</button>
             ))}
           </nav>
           {superadminView === "overview" && (
@@ -673,7 +747,7 @@ function Dashboard({ user, token, onLogout }) {
                   {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
                 </section>
                 <section className="panel">
-                  <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>View all</button></div>
+                  <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("requests")}>View all</button></div>
                           {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
@@ -697,16 +771,18 @@ function Dashboard({ user, token, onLogout }) {
             </section>
           )}
           {superadminView === "collections" && (
-            <section className="superadmin-content dashboard-grid superadmin-operations">
+            <section className="superadmin-content superadmin-operations">
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
                 {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
-              <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
-              </div>
+            </section>
+          )}
+          {superadminView === "requests" && (
+            <section className="panel admin-request-content">
+              <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
+              {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
             </section>
           )}
         </>
@@ -732,17 +808,11 @@ function Dashboard({ user, token, onLogout }) {
             </section>
           )}
           {adminPage === "admin-schedules" && (
-            <section className="dashboard-grid admin-operations">
-              <div className="panel schedule-panel">
-                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
-                <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
-                <div className="schedule-list">
-                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
-                </div>
-              </div>
-              <div className="panel requests-panel">
-                <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-                <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
+            <section className="panel admin-operations schedule-panel">
+              <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
+              <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
+              <div className="schedule-list">
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
             </section>
           )}

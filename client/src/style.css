@@ -66,7 +66,27 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .inline-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 13px; margin: 0 0 13px; background: #f8faf6; border-radius: 8px; }.inline-form label { font-size: 9px; }.inline-form input, .inline-form select { background: #fff; font-size: 10px; padding: 9px; }.inline-form .button { grid-column: 1/-1; justify-self: start; padding: 9px 12px; font-size: 10px; }
 .schedule-residency-context { display: grid; gap: 6px; align-content: start; color: #556151; font-size: 9px; }.schedule-residency-context span { font-weight: 600; }.schedule-residency-context strong { min-height: 34px; display: flex; align-items: center; padding: 0 9px; border: 1px solid #e1e6dd; border-radius: 7px; background: #fff; color: #28362a; font-size: 10px; font-weight: 500; }
 .request-card { padding: 13px; border: 1px solid #edf0ea; border-radius: 8px; }.request-meta { display: flex; justify-content: space-between; align-items: center; color: #969c92; font-size: 9px; }.request-card p { margin: 0 0 8px; color: #727d70; font-size: 10px; line-height: 1.6; }.request-card > small { color: #8a9286; font-size: 9px; }.request-panel .panel-description { margin: 0 0 15px; }.empty-state { text-align: center; padding: 25px 10px; color: #899286; }.empty-state span { color: #91a784; font-size: 23px; }.empty-state p { margin: 7px 0 0; font-size: 10px; }
-.request-card { display: grid; justify-items: start; gap: 7px; }.request-card h3, .request-card p, .request-card > small { margin: 0; }.request-review-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 5px; }.request-approval-form, .request-decline-form { min-width: 0; display: grid; align-content: start; justify-items: start; gap: 7px; margin: 0; }.request-approval-form label, .request-decline-form label { width: 100%; display: grid; gap: 5px; color: #556151; font-size: 9px; font-weight: 600; }.request-approval-form input { width: 100%; max-width: 190px; padding: 7px 8px; border: 1px solid #e1e6dd; border-radius: 6px; background: #fbfcfa; color: #28362a; font-size: 10px; }.request-decline-form textarea { width: 100%; min-height: 34px; resize: vertical; padding: 8px; border: 1px solid #e1e6dd; border-radius: 6px; background: #fbfcfa; color: #28362a; font-size: 10px; }.request-approval-form input:focus, .request-decline-form textarea:focus { border-color: #8ca980; outline: 0; box-shadow: 0 0 0 3px #8ca98020; }.request-approval-form .button, .request-decline-form .button, .request-card > .button { margin-top: 2px; }.request-card > .request-decline-reason { width: 100%; padding: 8px; border-radius: 6px; background: #fbf1ed; color: #934e3e; }
+.request-card { display: grid; justify-items: start; gap: 7px; }.request-card h3, .request-card p, .request-card > small { margin: 0; }.request-review-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 5px; }.request-review-actions .button, .request-dialog-actions .button { margin-top: 0; }.request-card > .button { margin-top: 2px; }.request-card > .request-decline-reason { width: 100%; padding: 8px; border-radius: 6px; background: #fbf1ed; color: #934e3e; }
+.request-decision-dialog { width: min(460px, calc(100vw - 32px)); max-height: min(90vh, 680px); overflow-y: auto; margin: auto; padding: 22px; border: 1px solid #e1e6dd; border-radius: 13px; background: #fff; color: #28362a; box-shadow: 0 20px 70px #24362835; }
+.request-decision-dialog::backdrop { background: #1e2b2180; backdrop-filter: blur(2px); }
+.request-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.request-dialog-heading h2 { margin: 6px 0 0; font: 700 20px "Manrope", sans-serif; letter-spacing: -.5px; }
+.request-dialog-close { width: 30px; height: 30px; flex: 0 0 auto; border: 0; border-radius: 7px; background: #f3f5f1; color: #64705f; font-size: 20px; line-height: 1; cursor: pointer; }
+.request-dialog-close:hover { background: #e8eee1; }
+.request-dialog-summary { margin: 17px 0; padding: 11px 12px; border-radius: 7px; background: #f8faf6; color: #727d70; font-size: 11px; line-height: 1.5; }
+.request-dialog-summary strong { color: #354236; }
+.request-dialog-error { margin: 0 0 14px; padding: 10px 11px; border-radius: 7px; background: #fbefea; color: #934e3e; font-size: 11px; line-height: 1.5; }
+.request-dialog-form { display: grid; gap: 13px; }
+.request-dialog-form label { display: grid; gap: 7px; color: #556151; font-size: 11px; font-weight: 600; }
+.request-dialog-form input, .request-dialog-form textarea { width: 100%; border: 1px solid #dfe5db; border-radius: 7px; background: #fbfcfa; color: #28362a; padding: 10px 11px; font: inherit; font-size: 12px; }
+.request-dialog-form textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+.request-dialog-form input:focus, .request-dialog-form textarea:focus { border-color: #8ca980; outline: 0; box-shadow: 0 0 0 3px #8ca98020; }
+.request-dialog-hint { margin: 0; color: #788174; font-size: 10px; line-height: 1.5; }
+.request-confirmation { padding: 13px; border: 1px solid #e5eddf; border-radius: 8px; background: #f4f8f1; }
+.request-confirmation-decline { border-color: #f0ddd7; background: #fdf5f2; }
+.request-confirmation p { margin: 0 0 9px; color: #4c5d48; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.request-confirmation-decline p { color: #824a3f; }
+.request-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .request-decline-reason { padding: 8px; border-radius: 6px; background: #fbf1ed; color: #934e3e !important; }.request-mailbox { margin-top: 17px; }.mailbox-message { padding: 13px; border: 1px solid #edf0ea; border-radius: 8px; }.mailbox-message h3 { margin: 8px 0 4px; font: 700 12px "Manrope", sans-serif; }.mailbox-message > p { margin: 0 0 7px; color: #727d70; font-size: 10px; line-height: 1.6; }.mailbox-message .mailbox-update { color: #4e6f47; }.mailbox-message .request-decline-reason { color: #934e3e; }
 @media (max-width: 760px) { .page-shell, .dashboard-shell { padding: 0 5%; }.nav-caption { display: none; }.hero { grid-template-columns: 1fr; padding-top: 39px; gap: 28px; }.hero-art { height: 280px; }.feature-row { grid-template-columns: 1fr; gap: 17px; }.account-section { grid-template-columns: 1fr; gap: 18px; padding: 38px 0; }.dashboard-grid { grid-template-columns: 1fr; }.user-nav { gap: 8px; }.user-name { display: none; } }
 @media (max-width: 420px) { .hero h1 { font-size: 39px; }.hero-art { height: 240px; }.inline-form { grid-template-columns: 1fr; }.inline-form .button { grid-column: auto; }.dashboard-heading h1 { font-size: 25px; } }
@@ -133,7 +153,7 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .superadmin-operations > .panel, .admin-operations > .panel { min-width: 0; }
 .superadmin-operations .inline-form, .admin-operations .inline-form { grid-template-columns: 1fr; }
 .superadmin-operations .inline-form .button, .admin-operations .inline-form .button { grid-column: auto; }
-.superadmin-operations .request-list, .admin-operations .request-list { max-height: 680px; overflow-y: auto; padding-right: 3px; }
+.admin-request-content .request-list { max-height: 680px; overflow-y: auto; padding-right: 3px; }
 .management-password-note { grid-column: 1 / -1; line-height: 1.6; }
 .management-password-note strong { color: #405c3a; }
 .password-change-layout { grid-template-columns: 1fr minmax(340px, .82fr); }
@@ -162,10 +182,6 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .calendar-event strong { color: #354236; font-size: 10px; }
 .calendar-event p, .calendar-no-events { margin: 0; color: #788174; font-size: 9px; line-height: 1.5; }
 .approved-request-event { border-left: 3px solid #78916f; }
-.request-approval-form { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
-.request-approval-form label { display: grid; gap: 5px; color: #556151; font-size: 9px; font-weight: 600; }
-.request-approval-form input { max-width: 190px; padding: 7px 8px; border: 1px solid #e1e6dd; border-radius: 6px; background: #fbfcfa; color: #28362a; font-size: 10px; }
-.request-approval-form input:focus { border-color: #8ca980; outline: 0; box-shadow: 0 0 0 3px #8ca98020; }
 @media (max-width: 760px) {
   .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .overview-stat { padding: 13px; }
@@ -175,5 +191,5 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
   .residency-create-form .button { align-self: flex-start; }
   .password-change-layout { grid-template-columns: 1fr; }
   .admin-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .request-review-actions { grid-template-columns: 1fr; }
+  .request-decision-dialog { padding: 18px; }
 }
