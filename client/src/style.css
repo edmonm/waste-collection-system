@@ -133,7 +133,6 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .dashboard-tab.active, .dashboard-tab.active:hover { background: #304f3a; color: #fff; }
 .dashboard-tab span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
 .dashboard-tab.active span { background: #fff; color: #304f3a; }
-.resident-dashboard-tabs .dashboard-tab { flex: 1 1 0; justify-content: center; }
 .superadmin-content { margin-bottom: 20px; }
 .admin-overview-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -276,9 +275,32 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .dashboard-shell .request-dialog-summary, .dashboard-shell .request-dialog-error,
 .dashboard-shell .request-confirmation p { font-size: 13px; }
 .dashboard-shell .request-dialog-hint { font-size: 12px; }
+.dashboard-tabs .dashboard-tab { flex: 1 1 0; min-width: 90px; justify-content: center; }
+.dashboard-shell .superadmin-overview-grid > .panel { min-height: 420px; padding: 28px; }
+.dashboard-shell .superadmin-content > .panel,
+.dashboard-shell .superadmin-operations > .panel,
+.dashboard-shell .admin-operations,
+.dashboard-shell .admin-request-content,
+.dashboard-shell .admin-residents-section > .panel { min-height: 560px; }
+.dashboard-shell .overview-stats { gap: 16px; margin-bottom: 20px; }
+.dashboard-shell .overview-stat { gap: 10px; padding: 22px; }
+.dashboard-shell .schedule-list, .dashboard-shell .request-list,
+.dashboard-shell .resident-list { gap: 14px; }
+.dashboard-shell .schedule-card, .dashboard-shell .request-card,
+.dashboard-shell .resident-row { padding: 18px; }
 @media (max-width: 760px) {
   .dashboard-shell { padding-right: 5%; padding-left: 5%; }
   .dashboard-heading { padding-top: 32px; padding-bottom: 25px; }
+  .dashboard-tabs .dashboard-tab { flex: 1 0 90px; }
+  .dashboard-shell .superadmin-overview-grid > .panel { min-height: 0; padding: 20px; }
+  .dashboard-shell .superadmin-content > .panel,
+  .dashboard-shell .superadmin-operations > .panel,
+  .dashboard-shell .admin-operations,
+  .dashboard-shell .admin-request-content,
+  .dashboard-shell .admin-residents-section > .panel { min-height: 0; }
+  .dashboard-shell .overview-stat { padding: 16px; }
+  .dashboard-shell .schedule-card, .dashboard-shell .request-card,
+  .dashboard-shell .resident-row { padding: 14px; }
 }
 @media (max-width: 420px) {
   .dashboard-heading h1 { font-size: 28px; }
