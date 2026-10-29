@@ -40,6 +40,7 @@ function publicUser(user) {
 
 router.post("/login", async (request, response, next) => {
   try {
+  
     const input = loginSchema.parse(request.body);
     const user = await User.findOne({ email: input.email.toLowerCase() }).select("+passwordHash");
     const actualRole = user?.role === "resident" ? "user" : user?.role;

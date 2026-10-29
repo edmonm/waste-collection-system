@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authenticate, requireAnyRole, requireRole } from "../middleware/auth.js";
 import { ServiceRequest } from "../models/ServiceRequest.js";
 import { sendSms } from "../services/sms.js";
+import { formatDateKey, formatTime24Hour, manilaDateTime } from "../utils/dateTime.js";
 
 const router = Router();
 const createSchema = z.object({
@@ -11,7 +12,11 @@ const createSchema = z.object({
   description: z.string().trim().min(1).max(1000)
 });
 const updateSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("approved"), scheduledDate: z.iso.date() }),
+  z.object({
+    status: z.literal("approved"),
+    scheduledDate: z.iso.date(),
+    scheduledTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+  }),
   z.object({ status: z.literal("declined"), declineReason: z.string().trim().min(1).max(500) })
 ]);
 
@@ -25,11 +30,7 @@ router.post("/", requireRole("user"), async (request, response, next) => {
       resident: request.user.id,
       residencyId: request.user.residencyId
     });
-    const notification = await sendSms(
-      request.user.phone,
-      "GreenLoop has received your community collection request. Your team will review it soon."
-    );
-    return response.status(201).json({ request: serviceRequest, notification });
+    return response.status(201).json({ request: serviceRequest });
   } catch (error) {
     return next(error);
   }
@@ -65,8 +66,28 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
     const serviceRequest = await ServiceRequest.findOneAndUpdate(
       { ...filter, status: "pending" },
       decision.status === "approved"
-        ? { status: decision.status, scheduledDate: new Date(`${decision.scheduledDate}T00:00:00.000Z`), declineReason: "" }
-        : { status: decision.status, scheduledDate: null, declineReason: decision.declineReason },
+        ? {
+          status: decision.status,
+          scheduledDate: new Date(`${decision.scheduledDate}T00:00:00.000Z`),
+          scheduledTime: decision.scheduledTime,
+          scheduledAt: manilaDateTime(decision.scheduledDate, decision.scheduledTime),
+          scheduledSmsStatus: "pending",
+          scheduledSmsClaimedAt: null,
+          scheduledSmsNextAttemptAt: null,
+          scheduledSmsSentAt: null,
+          declineReason: ""
+        }
+        : {
+          status: decision.status,
+          scheduledDate: null,
+          scheduledTime: null,
+          scheduledAt: null,
+          scheduledSmsStatus: null,
+          scheduledSmsClaimedAt: null,
+          scheduledSmsNextAttemptAt: null,
+          scheduledSmsSentAt: null,
+          declineReason: decision.declineReason
+        },
       { new: true, runValidators: true }
     ).populate("resident", "name phone email");
     if (!serviceRequest) {
@@ -77,7 +98,7 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
     const notification = decision.status === "approved"
       ? await sendSms(
         serviceRequest.resident.phone,
-        `GreenLoop approved your community collection request for ${decision.scheduledDate}.`
+        `GreenLoop approved your community collection. Estimated collection time: ${formatDateKey(decision.scheduledDate)} at ${formatTime24Hour(decision.scheduledTime)} Philippines time.`
       )
       : await sendSms(
         serviceRequest.resident.phone,

@@ -85,6 +85,7 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
       localStorage.setItem(tokenKey, result.token);
       onAuthenticated(result.user, result.token);
     } catch (error) {
+      
       setNotice({ message: error.message, isError: true });
     } finally {
       setSubmitting(false);
@@ -284,6 +285,7 @@ function ResidentCalendar({ schedules, requests }) {
             <span className="status-pill">Approved request</span>
             <strong>{event.request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</strong>
             <p>{event.request.description}</p>
+            {event.request.scheduledTime && <p>Estimated collection time: {formatArrivalTime(event.request.scheduledTime)}</p>}
           </article>
         )) : <p className="calendar-no-events">No collections or approved requests for this day.</p>}
       </div>
@@ -345,7 +347,7 @@ function RequestCard({ request, onApprove, onDecline, onDelete }) {
   async function confirmDecision() {
     setSubmitting(true);
     const succeeded = confirmation.type === "approve"
-      ? await onApprove(request._id, confirmation.scheduledDate)
+      ? await onApprove(request._id, confirmation.scheduledDate, confirmation.scheduledTime, confirmation.scheduledAt)
       : await onDecline(request._id, confirmation.declineReason);
     setSubmitting(false);
     if (succeeded === true) closeDialog();
@@ -358,7 +360,7 @@ function RequestCard({ request, onApprove, onDecline, onDelete }) {
       <h3>{requestLabel}</h3>
       <p>{request.description}</p>
       <small>From {request.resident.name} · {request.resident.phone}</small>
-      {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}</small>}
+      {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}{request.scheduledTime ? ` at ${formatArrivalTime(request.scheduledTime)}` : ""}</small>}
       {request.status === "declined" && request.declineReason && <p className="request-decline-reason"><strong>Reason:</strong> {request.declineReason}</p>}
       {request.status === "pending" && (
         <div className="request-review-actions">
@@ -390,7 +392,7 @@ function RequestCard({ request, onApprove, onDecline, onDelete }) {
               <div className={`request-confirmation ${confirmation.type === "decline" ? "request-confirmation-decline" : ""}`}>
                 <p>
                   {confirmation.type === "approve"
-                    ? `Approve this request and schedule collection for ${dateKeyDate(confirmation.scheduledDate).toLocaleDateString()}?`
+                    ? `Approve this request and schedule collection for ${dateKeyDate(confirmation.scheduledDate).toLocaleDateString()} at ${formatArrivalTime(confirmation.scheduledTime)} Philippines time?`
                     : `Decline this request with the reason: “${confirmation.declineReason}”`}
                 </p>
                 <p>The resident will be notified by SMS. Please confirm that this decision is correct.</p>
@@ -406,13 +408,20 @@ function RequestCard({ request, onApprove, onDecline, onDelete }) {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 setConfirmation(decision === "approve"
-                  ? { type: "approve", scheduledDate: data.get("scheduledDate") }
+                  ? {
+                    type: "approve",
+                    scheduledDate: data.get("scheduledDate"),
+                    scheduledTime: data.get("scheduledTime")
+                  }
                   : { type: "decline", declineReason: data.get("declineReason") });
               }}>
                 {decision === "approve"
-                  ? <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required autoFocus /></label>
+                  ? <>
+                    <label>Approved collection date<input type="date" name="scheduledDate" min={localDateKey(new Date())} required autoFocus /></label>
+                    <label>Estimated collection time (Philippines time)<input type="time" name="scheduledTime" required /></label>
+                  </>
                   : <label>Reason for declining<textarea name="declineReason" rows="4" maxLength="500" required autoFocus placeholder="Explain why this request cannot be approved" /></label>}
-                <p className="request-dialog-hint">You will be asked to confirm before this decision is sent to the resident.</p>
+                <p className="request-dialog-hint">{decision === "approve" ? "The resident will receive an SMS when approved and another reminder at this estimated time." : "You will be asked to confirm before this decision is sent to the resident."}</p>
                 <div className="request-dialog-actions">
                   <button className="button button-small button-outline" type="button" onClick={closeDialog}>Cancel</button>
                   <button className={`button button-small ${decision === "approve" ? "button-dark" : "button-delete"}`} type="submit">Submit {decision === "approve" ? "approval" : "decline"}</button>
@@ -446,7 +455,7 @@ function RequestMailbox({ requests }) {
               {request.status === "pending" && <p className="mailbox-update">Your request is waiting for admin review.</p>}
               {request.status === "approved" && (
                 <p className="mailbox-update">
-                  Your request was approved{request.scheduledDate ? ` for ${dateKeyDate(request.scheduledDate).toLocaleDateString()}` : ""}.
+                  Your request was approved{request.scheduledDate ? ` for ${dateKeyDate(request.scheduledDate).toLocaleDateString()}${request.scheduledTime ? ` at ${formatArrivalTime(request.scheduledTime)}` : ""}` : ""}.
                 </p>
               )}
               {request.status === "declined" && <p className="request-decline-reason"><strong>Admin's reason:</strong> {request.declineReason || "No reason was provided."}</p>}
@@ -540,10 +549,8 @@ function Dashboard({ user, token, onLogout }) {
       await refreshDashboard();
       const notification = result.notification;
       const message = notification.sent
-        ? `Schedule published and SMS sent to ${notification.delivered} resident(s).`
-        : notification.delivered
-          ? `Schedule published. SMS reached ${notification.delivered} resident(s); ${notification.reason}`
-          : `Schedule published. SMS was not sent: ${notification.reason}`;
+        ? `Schedule published. SMS queued for ${notification.queued} resident(s).`
+        : `Schedule published. SMS could not be queued: ${notification.reason}`;
       setNotice({ message });
       form.reset();
     } catch (error) {
@@ -560,12 +567,10 @@ function Dashboard({ user, token, onLogout }) {
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     try {
-      const result = await api("/requests", { method: "POST", body: JSON.stringify(data) }, token);
+      await api("/requests", { method: "POST", body: JSON.stringify(data) }, token);
       await refreshDashboard();
       setNotice({
-        message: result.notification.sent
-          ? "Your request was submitted and is pending review. It has not been approved yet. A confirmation SMS is on its way."
-          : `Your request was submitted and is pending review. It has not been approved yet. SMS confirmation was not delivered: ${result.notification.reason}`
+        message: "Your request was submitted and is pending review. You will receive an SMS when the admin makes a decision."
       });
       form.reset();
     } catch (error) {
@@ -635,18 +640,18 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
-  async function approveRequest(id, scheduledDate) {
+  async function approveRequest(id, scheduledDate, scheduledTime) {
     setNotice(null);
     try {
       const result = await api(`/requests/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: "approved", scheduledDate })
+        body: JSON.stringify({ status: "approved", scheduledDate, scheduledTime })
       }, token);
       await refreshDashboard();
       setNotice({
         message: result.notification.sent
-          ? "Request approved and resident notified by SMS."
-          : `Request approved. SMS was not sent: ${result.notification.reason}`
+          ? `Request approved and approval SMS queued. A reminder SMS is scheduled for ${formatArrivalTime(scheduledTime)} Philippines time.`
+          : `Request approved. Approval SMS could not be queued: ${result.notification.reason} A reminder SMS is scheduled for ${formatArrivalTime(scheduledTime)} Philippines time.`
       });
       return true;
     } catch (error) {
@@ -665,8 +670,8 @@ function Dashboard({ user, token, onLogout }) {
       await refreshDashboard();
       setNotice({
         message: result.notification.sent
-          ? "Request declined and resident notified by SMS."
-          : `Request declined. SMS was not sent: ${result.notification.reason}`
+          ? "Request declined and SMS queued for the resident."
+          : `Request declined. SMS could not be queued: ${result.notification.reason}`
       });
       return true;
     } catch (error) {

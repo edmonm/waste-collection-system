@@ -8,8 +8,15 @@ import scheduleRoutes from "./routes/schedules.js";
 import requestRoutes from "./routes/requests.js";
 import residencyRoutes from "./routes/residencies.js";
 import userRoutes from "./routes/users.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 export const app = express();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
 
 app.use(helmet());
 app.use(cors({ origin: config.clientOrigin }));
@@ -30,9 +37,19 @@ app.use("/api/requests", requestRoutes);
 app.use("/api/residencies", residencyRoutes);
 app.use("/api/users", userRoutes);
 
+
+app.use(express.static(path.join(__dirname, "../dist")));
+
+app.get('/{*splat}', (req, res) => {
+  res.sendFile(path.join(__dirname, "../dist/index.html"));
+});
+
+
 app.use((_request, response) => {
   response.status(404).json({ error: "Endpoint not found." });
 });
+
+
 
 app.use((error, _request, response, _next) => {
   if (error.name === "ValidationError" || error.name === "ZodError") {

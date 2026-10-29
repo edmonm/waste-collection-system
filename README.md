@@ -7,7 +7,7 @@ GreenLoop helps a community publish waste collection schedules, notify residents
 - **Frontend:** React, JavaScript, Vite, Tailwind CSS
 - **Backend:** Node.js, Express, JSON REST API
 - **Database:** MongoDB with Mongoose
-- **SMS:** Optional Twilio integration
+- **SMS:** Optional TextBee integration using an Android phone as the gateway
 
 ## Requirements
 
@@ -70,7 +70,7 @@ SUPERADMIN_PHONE=+639171234567
 - For MongoDB Atlas, replace `MONGODB_URI` with your Atlas connection URI. Make sure your IP address and database credentials are allowed by Atlas.
 - Replace the superadmin example details with your own. The password must be **8-72 characters**. Phone numbers must use Philippine mobile format: `+639` followed by 9 digits.
 - Use a long, private random value for `JWT_SECRET`. Do not share or commit `.env`.
-- Twilio variables are optional. Leave them blank to use the app without SMS delivery.
+- TextBee variables are optional. Leave them blank to use the app without SMS delivery.
 
 ### 4. Create the initial superadmin
 
@@ -102,7 +102,7 @@ After the app is running:
 1. On the sign-in page, choose **Login** and sign in with the superadmin email and password from `.env`.
 2. In the superadmin dashboard, create a **residency**.
 3. Create an **Admin** account and assign it to that residency. The admin can manage residents, schedules, and service requests only for its assigned residency.
-4. Admins can create user accounts and assign them to their residency. Each user sees schedules for their own residency and receives schedule SMS notifications when Twilio is configured.
+4. Admins can create user accounts and assign them to their residency. Each user sees schedules for their own residency and receives schedule SMS notifications when TextBee is configured.
 5. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
@@ -141,9 +141,23 @@ Creates the initial superadmin from the `SUPERADMIN_*` values in `.env`. It is n
 
 ## SMS notifications
 
-The main account, schedules, and request features work without SMS. To enable text delivery, set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` in `.env`, using credentials from your Twilio account. Restart the development server after changing `.env`.
+The main account, schedules, and request features work without SMS. To enable text messages through TextBee:
 
-Without valid Twilio settings, the app saves schedules and requests but displays that the SMS was not sent.
+1. Create a TextBee account and install the TextBee gateway app on an Android phone with a SIM that can send SMS. Register the phone in the [TextBee dashboard](https://app.textbee.dev/dashboard) and grant the app SMS permission. Keep the phone powered on and connected to the internet.
+2. In the dashboard's **API Keys** panel, generate an API key. The key is shown only once, so copy it somewhere safe.
+3. In the Devices panel, copy the registered phone's Device ID. This is optional if you set a default device in TextBee.
+4. Put the key and, optionally, the device ID in the root `.env` file:
+
+   ```dotenv
+   TEXTBEE_API_KEY=your_textbee_api_key
+   TEXTBEE_DEVICE_ID=your_textbee_device_id
+   ```
+
+5. Make sure resident phone numbers use international E.164 format (for example, `+639171234567`), then restart the development server.
+
+The backend sends messages through TextBee's REST API. A successful response means TextBee accepted the message into its sending queue; actual delivery depends on the Android phone being online and its SIM/carrier. Without a valid API key, schedules and requests are still saved, but the app reports that the SMS could not be queued. Keep the API key private and never put it in frontend code or commit it to source control.
+
+When an administrator approves a service request, the resident receives an SMS immediately with the approved collection date and estimated collection time (Philippines time). GreenLoop also queues a reminder SMS for that time; due reminders are retried if TextBee cannot queue them and remain scheduled across API restarts. The API server must stay running to process scheduled reminders. On startup, its logs confirm that the reminder worker has started; successful queueing and provider errors are also logged.
 
 ## Troubleshooting
 
