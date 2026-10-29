@@ -186,13 +186,17 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | GET | `/api/auth/me` | Signed in | Get the current account. |
 | GET/POST | `/api/residencies` | Superadmin | List or create residencies. |
 | PATCH | `/api/residencies/:id` | Superadmin | Activate or deactivate a residency. |
-| GET/POST | `/api/users` | Admin or superadmin | List or create accounts within the permitted scope. |
+| GET/POST | `/api/users` | Admin or superadmin | Search/paginate or create accounts within the permitted scope. GET supports `page`, `limit` (max 100), and name/email/phone prefix `search`; superadmins can also filter by `role` and `residencyId`. |
 | PATCH | `/api/users/:id` | Superadmin | Change an account's role or residency. |
-| GET | `/api/schedules` | Signed in | List schedules visible to the account. |
+| GET | `/api/schedules` | Signed in | List upcoming active schedules visible to the account. Admins and superadmins can pass `includeHistory=true` to include cancelled schedules. |
 | POST | `/api/schedules` | Admin or superadmin | Publish a schedule and notify that residency's residents. |
+| PATCH | `/api/schedules/:id` | Admin or superadmin | Edit a schedule within the permitted residency; change history is retained and residents are notified. |
+| PATCH | `/api/schedules/:id/cancel` | Admin or superadmin | Cancel a schedule with a required reason; the record is retained and residents are notified. |
 | POST | `/api/requests` | Resident | Submit a service request. |
-| GET | `/api/requests` | Admin or superadmin | List requests within the permitted scope. |
-| PATCH | `/api/requests/:id` | Admin or superadmin | Mark a request reviewed within the permitted scope. |
+| GET | `/api/requests` | Signed in | List own requests (residents) or scoped requests (admins). Supports `page`, `limit` (max 100), `status`, `kind`, `from`, `to`, `search` (resident name/email/phone prefix), and `sort` (`newest`, `oldest`, or `scheduled`). Responses include pagination metadata; pending-count metadata is scoped to the signed-in user's access. |
+| PATCH | `/api/requests/:id` | Admin or superadmin | Approve with a scheduled date or decline with a reason; the reviewer and review time are recorded. |
+
+Account, request, and schedule records are ordered with stable tie-breakers for consistent pagination. Schedule cancellations and request decisions remain in the database for history; cancelled schedules are omitted from residents' active calendars.
 
 ## Production note
 

@@ -10,4 +10,8 @@ const userSchema = new mongoose.Schema({
   residencyId: { type: mongoose.Schema.Types.ObjectId, ref: "Residency", default: null }
 }, { timestamps: true });
 
+userSchema.index({ name: 1, _id: 1 });
+userSchema.index({ phone: 1, _id: 1 });
+userSchema.index({ residencyId: 1, role: 1, name: 1, _id: 1 });
+
 export const User = mongoose.model("User", userSchema);
