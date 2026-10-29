@@ -5,6 +5,7 @@ import { authenticate, requireAnyRole } from "../middleware/auth.js";
 import { Schedule } from "../models/Schedule.js";
 import { User } from "../models/User.js";
 import { broadcastSms } from "../services/sms.js";
+import { formatDateKey, formatTime24Hour } from "../utils/dateTime.js";
 
 const router = Router();
 const scheduleSchema = z.object({
@@ -42,7 +43,7 @@ router.post("/", requireAnyRole("admin", "superadmin"), async (request, response
     const residents = await User.find({ role: { $in: ["user", "resident"] }, residencyId }).select("phone").lean();
     const notification = await broadcastSms(
       residents.map((resident) => resident.phone),
-      `GreenLoop collection update: ${schedule.wasteType} in ${schedule.area} on ${new Date(schedule.date).toLocaleDateString()}.`
+      `GreenLoop collection update: ${schedule.wasteType} in ${schedule.area} on ${formatDateKey(new Date(schedule.date).toISOString().slice(0, 10))}. Estimated arrival time: ${formatTime24Hour(schedule.estimatedArrivalTime)} Philippines time.`
     );
     return response.status(201).json({ schedule, notification });
   } catch (error) {
