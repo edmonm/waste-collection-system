@@ -20,58 +20,21 @@ const updateSchema = z.object({
   residencyId: z.string().regex(/^[a-f\d]{24}$/i),
   role: z.enum(["admin", "user"]).optional()
 });
-const listQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).max(1000000).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(25),
-  search: z.string().trim().max(80).optional(),
-  residencyId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
-  role: z.enum(["admin", "user"]).optional()
-});
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 router.use(authenticate, requireAnyRole("admin", "superadmin"));
 
 router.get("/", async (request, response, next) => {
   try {
-    const query = listQuerySchema.parse(request.query);
-    const baseFilter = request.user.role === "superadmin"
+    const filter = request.user.role === "superadmin"
       ? { role: { $ne: "superadmin" } }
-      : { residencyId: request.user.residencyId, role: { $in: ["user", "resident"] } };
-    if (request.user.role === "superadmin" && query.residencyId) {
-      baseFilter.residencyId = query.residencyId;
-    }
-    const filter = { ...baseFilter };
-    if (request.user.role === "superadmin" && query.role) {
-      filter.role = query.role === "user" ? { $in: ["user", "resident"] } : query.role;
-    }
-    if (query.search) {
-      const prefix = new RegExp(`^${escapeRegex(query.search)}`, "i");
-      filter.$or = [{ name: prefix }, { email: prefix }, { phone: prefix }];
-    }
-    const skip = (query.page - 1) * query.limit;
-    const [users, total, roleCounts] = await Promise.all([
-      User.find(filter)
-        .select("name email phone role residencyId createdAt")
-        .populate("residencyId", "name")
-        .sort({ name: 1, _id: 1 })
-        .skip(skip)
-        .limit(query.limit)
-        .lean(),
-      User.countDocuments(filter),
-      User.aggregate([
-        { $match: baseFilter },
-        { $group: { _id: "$role", count: { $sum: 1 } } }
-      ])
-    ]);
-    const counts = Object.fromEntries(roleCounts.map(({ _id, count }) => [_id, count]));
-    return response.json({
-      users,
-      pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) },
-      counts: { admins: counts.admin || 0, residents: (counts.user || 0) + (counts.resident || 0) }
-    });
+      : { residencyId: request.user.residencyId, role: "user" };
+    const users = await User.find(filter)
+      .select("name email phone role residencyId createdAt")
+      .populate("residencyId", "name")
+      .sort({ name: 1 })
+      .limit(500)
+      .lean();
+    return response.json({ users });
   } catch (error) {
     return next(error);
   }

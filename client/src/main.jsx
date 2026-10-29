@@ -186,126 +186,18 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
   );
 }
 
-function ScheduleCard({ schedule, onEdit, onCancel }) {
+function ScheduleCard({ schedule, onDelete }) {
   const date = dateKeyDate(schedule.date);
-  const [editing, setEditing] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [actionError, setActionError] = useState("");
-  const [actionSubmitting, setActionSubmitting] = useState(false);
-  const editDialogRef = useRef(null);
-  const cancelDialogRef = useRef(null);
-
-  useEffect(() => {
-    const dialog = editDialogRef.current;
-    if (!dialog) return;
-    if (editing && !dialog.open) dialog.showModal();
-    if (!editing && dialog.open) dialog.close();
-  }, [editing]);
-
-  useEffect(() => {
-    const dialog = cancelDialogRef.current;
-    if (!dialog) return;
-    if (cancelling && !dialog.open) dialog.showModal();
-    if (!cancelling && dialog.open) dialog.close();
-  }, [cancelling]);
-
-  function closeEdit() {
-    setEditing(false);
-    setActionError("");
-  }
-
-  function closeCancel() {
-    setCancelling(false);
-    setCancelReason("");
-    setConfirmCancel(false);
-    setActionError("");
-  }
-
-  async function submitEdit(event) {
-    event.preventDefault();
-    setActionSubmitting(true);
-    const result = await onEdit(schedule._id, Object.fromEntries(new FormData(event.currentTarget)));
-    setActionSubmitting(false);
-    if (result === true) closeEdit();
-    else setActionError(result || "The schedule could not be updated.");
-  }
-
-  async function submitCancel() {
-    setActionSubmitting(true);
-    const result = await onCancel(schedule._id, cancelReason);
-    setActionSubmitting(false);
-    if (result === true) closeCancel();
-    else setActionError(result || "The schedule could not be cancelled.");
-  }
-
   return (
     <article className="schedule-card">
       <div className="date-block"><strong>{date.toLocaleDateString(undefined, { day: "2-digit" })}</strong><span>{date.toLocaleDateString(undefined, { month: "short" })}</span></div>
       <div className="schedule-info">
-        <span className={`status-pill${schedule.status === "cancelled" ? " status-declined" : ""}`}>{schedule.status === "cancelled" ? "Cancelled" : schedule.wasteType}</span>
+        <span className="status-pill">{schedule.wasteType}</span>
         <h3>{schedule.area}</h3>
         <p>{date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}{schedule.notes ? ` · ${schedule.notes}` : ""}</p>
         <p>Estimated arrival: {formatArrivalTime(schedule.estimatedArrivalTime)}</p>
-        {schedule.status === "cancelled" && <p className="schedule-cancellation-reason"><strong>Cancellation reason:</strong> {schedule.cancellationReason}</p>}
-        {schedule.status !== "cancelled" && (onEdit || onCancel) && (
-          <div className="schedule-actions">
-            {onEdit && <button className="button button-small button-outline" type="button" onClick={() => setEditing(true)}>Edit</button>}
-            {onCancel && <button className="button button-small button-delete" type="button" onClick={() => setCancelling(true)}>Cancel collection</button>}
-          </div>
-        )}
-        {schedule.history?.length > 0 && (
-          <details className="schedule-history">
-            <summary>Change history ({schedule.history.length})</summary>
-            <div className="schedule-history-list">
-              {schedule.history.slice().reverse().map((entry, index) => (
-                <div key={`${entry.changedAt}-${index}`}>
-                  <strong>{entry.action === "cancelled" ? "Cancelled" : "Updated"} · {new Date(entry.changedAt).toLocaleString()}</strong>
-                  <span>By {entry.changedBy?.name || "Administrator"}</span>
-                  {entry.reason && <span>Reason: {entry.reason}</span>}
-                  {entry.changes?.map((change) => (
-                    <span key={change.field}>{change.field}: {change.from || "—"} → {change.to || "—"}</span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+        {onDelete && <button className="button button-small button-delete" type="button" onClick={() => onDelete(schedule._id, schedule.area)}>Delete collection</button>}
       </div>
-      {onEdit && (
-        <dialog ref={editDialogRef} className="schedule-dialog" aria-label="Edit collection schedule" onClose={closeEdit}>
-          <div className="request-dialog-heading"><div><div className="eyebrow">UPDATE COLLECTION</div><h2>Edit schedule</h2></div><button className="request-dialog-close" type="button" aria-label="Close dialog" onClick={closeEdit}>×</button></div>
-          {actionError && <p className="request-dialog-error" role="alert">{actionError}</p>}
-          <ScheduleForm key={`${schedule._id}-${editing}`} onSubmit={submitEdit} schedule={schedule} residencyName={schedule.residencyId?.name || ""} submitting={actionSubmitting} />
-          <button className="button button-small button-outline schedule-dialog-cancel" type="button" onClick={closeEdit} disabled={actionSubmitting}>Close</button>
-        </dialog>
-      )}
-      {onCancel && (
-        <dialog ref={cancelDialogRef} className="schedule-dialog" aria-labelledby={`cancel-schedule-${schedule._id}`} onClose={closeCancel}>
-          <div className="request-dialog-heading"><div><div className="eyebrow">CANCEL COLLECTION</div><h2 id={`cancel-schedule-${schedule._id}`}>{confirmCancel ? "Confirm cancellation" : "Cancel this schedule?"}</h2></div><button className="request-dialog-close" type="button" aria-label="Close dialog" onClick={closeCancel}>×</button></div>
-          <p className="request-dialog-summary"><strong>{schedule.wasteType} · {schedule.area}</strong><br />{date.toLocaleDateString(undefined, { dateStyle: "long" })}</p>
-          {actionError && <p className="request-dialog-error" role="alert">{actionError}</p>}
-          {confirmCancel ? (
-            <div className="request-confirmation request-confirmation-decline">
-              <p>This collection will be cancelled and residents in this residency will be notified.</p>
-              <p><strong>Reason:</strong> {cancelReason}</p>
-              <div className="request-dialog-actions">
-                <button className="button button-small button-outline" type="button" onClick={() => setConfirmCancel(false)} disabled={actionSubmitting}>Go back</button>
-                <button className="button button-small button-delete" type="button" onClick={submitCancel} disabled={actionSubmitting}>{actionSubmitting ? "Cancelling..." : "Confirm cancellation"}</button>
-              </div>
-            </div>
-          ) : (
-            <form className="request-dialog-form" onSubmit={(event) => { event.preventDefault(); setConfirmCancel(true); }}>
-              <label>Reason for cancellation<textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} rows="4" maxLength="500" required placeholder="Explain why this collection is being cancelled" /></label>
-              <div className="request-dialog-actions">
-                <button className="button button-small button-outline" type="button" onClick={closeCancel}>Keep schedule</button>
-                <button className="button button-small button-delete" type="submit">Continue</button>
-              </div>
-            </form>
-          )}
-        </dialog>
-      )}
     </article>
   );
 }
@@ -399,18 +291,18 @@ function ResidentCalendar({ schedules, requests }) {
   );
 }
 
-function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName = "", schedule = null, submitting = false }) {
+function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName = "" }) {
   return (
     <form className="inline-form" onSubmit={onSubmit}>
-      {!schedule && (admin
+      {admin
         ? <div className="schedule-residency-context"><span>Residency</span><strong>{residencyName || "Your assigned residency"}</strong></div>
-        : <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>)}
-      <label>Collection area<input name="area" required maxLength="100" placeholder="e.g. North District" defaultValue={schedule?.area || ""} /></label>
-      <label>Collection date<input name="date" type="date" required defaultValue={schedule?.date?.slice(0, 10) || ""} /></label>
-      <label>Estimated arrival time<input name="estimatedArrivalTime" type="time" required defaultValue={schedule?.estimatedArrivalTime || ""} /></label>
-      <label>Waste type<select name="wasteType" required defaultValue={schedule?.wasteType || "General waste"}><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
-      <label>Notes (optional)<input name="notes" maxLength="300" placeholder="Collection details" defaultValue={schedule?.notes || ""} /></label>
-      <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Saving..." : schedule ? "Save changes" : "Publish schedule ↗"}</button>
+        : <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
+      <label>Collection area<input name="area" required maxLength="100" placeholder="e.g. North District" /></label>
+      <label>Collection date<input name="date" type="date" required /></label>
+      <label>Estimated arrival time<input name="estimatedArrivalTime" type="time" required /></label>
+      <label>Waste type<select name="wasteType" required><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
+      <label>Notes (optional)<input name="notes" maxLength="300" placeholder="Collection details" /></label>
+      <button className="button button-dark" type="submit">Publish schedule ↗</button>
     </form>
   );
 }
@@ -430,54 +322,7 @@ function AccountForm({ onSubmit, admin, residencies }) {
   );
 }
 
-function Pagination({ pagination, onPageChange }) {
-  const { page, pages, total, limit } = pagination;
-  const firstItem = total ? (page - 1) * limit + 1 : 0;
-  const lastItem = Math.min(page * limit, total);
-  return (
-    <div className="pagination" aria-label="List pages">
-      <span>{firstItem}–{lastItem} of {total}</span>
-      <div>
-        <button className="button button-small button-outline" type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>Previous</button>
-        <span>Page {pages ? page : 0} of {pages}</span>
-        <button className="button button-small button-outline" type="button" onClick={() => onPageChange(page + 1)} disabled={!pages || page >= pages}>Next</button>
-      </div>
-    </div>
-  );
-}
-
-function RequestFilters({ filters, searchInput, onSearchInput, onChange, onApply, onReset }) {
-  return (
-    <form className="list-filters request-filters" onSubmit={(event) => { event.preventDefault(); onApply(); }}>
-      <label>Resident search<input value={searchInput} onChange={(event) => onSearchInput(event.target.value)} maxLength="80" placeholder="Name, email, or phone prefix" /></label>
-      <label>Status<select value={filters.status} onChange={(event) => onChange("status", event.target.value)}><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="reviewed">Reviewed</option></select></label>
-      <label>Request type<select value={filters.kind} onChange={(event) => onChange("kind", event.target.value)}><option value="">All types</option><option value="missed_pickup">Missed pickup</option><option value="special_request">Special request</option></select></label>
-      <label>From<input type="date" value={filters.from} onChange={(event) => onChange("from", event.target.value)} /></label>
-      <label>To<input type="date" value={filters.to} onChange={(event) => onChange("to", event.target.value)} /></label>
-      <label>Sort<select value={filters.sort} onChange={(event) => onChange("sort", event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-      <div className="list-filter-actions">
-        <button className="button button-small button-dark" type="submit">Apply filters</button>
-        <button className="button button-small button-outline" type="button" onClick={onReset}>Clear</button>
-      </div>
-    </form>
-  );
-}
-
-function AccountFilters({ searchInput, onSearchInput, role, onRoleChange, residencyId, onResidencyChange, residencies, admin, onApply, onReset }) {
-  return (
-    <form className="list-filters account-filters" onSubmit={(event) => { event.preventDefault(); onApply(); }}>
-      <label>Search accounts<input value={searchInput} onChange={(event) => onSearchInput(event.target.value)} maxLength="80" placeholder="Name, email, or phone prefix" /></label>
-      {!admin && <label>Role<select value={role} onChange={(event) => onRoleChange(event.target.value)}><option value="">All roles</option><option value="admin">Admins</option><option value="user">Residents</option></select></label>}
-      {!admin && <label>Residency<select value={residencyId} onChange={(event) => onResidencyChange(event.target.value)}><option value="">All residencies</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
-      <div className="list-filter-actions">
-        <button className="button button-small button-dark" type="submit">Search</button>
-        <button className="button button-small button-outline" type="button" onClick={onReset}>Clear</button>
-      </div>
-    </form>
-  );
-}
-
-function RequestCard({ request, onApprove, onDecline }) {
+function RequestCard({ request, onApprove, onDecline, onDelete }) {
   const [decision, setDecision] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [decisionError, setDecisionError] = useState("");
@@ -515,12 +360,14 @@ function RequestCard({ request, onApprove, onDecline }) {
       <small>From {request.resident.name} · {request.resident.phone}</small>
       {request.status === "approved" && request.scheduledDate && <small>Scheduled for {dateKeyDate(request.scheduledDate).toLocaleDateString()}</small>}
       {request.status === "declined" && request.declineReason && <p className="request-decline-reason"><strong>Reason:</strong> {request.declineReason}</p>}
-      {request.reviewedAt && <small>Reviewed by {request.reviewedBy?.name || "administrator"} · {new Date(request.reviewedAt).toLocaleString()}</small>}
       {request.status === "pending" && (
         <div className="request-review-actions">
           <button className="button button-small button-outline" type="button" onClick={() => { setDecisionError(""); setDecision("approve"); }}>Approve</button>
           <button className="button button-small button-delete" type="button" onClick={() => { setDecisionError(""); setDecision("decline"); }}>Decline</button>
         </div>
+      )}
+      {onDelete && request.status !== "pending" && (
+        <button className="button button-small button-delete" type="button" onClick={() => onDelete(request._id, requestLabel)}>Delete request</button>
       )}
       <dialog
         ref={dialogRef}
@@ -579,12 +426,12 @@ function RequestCard({ request, onApprove, onDecline }) {
   );
 }
 
-function RequestMailbox({ requests, pagination, onPageChange }) {
+function RequestMailbox({ requests }) {
   return (
     <section className="panel request-mailbox" id="resident-mailbox">
       <div className="panel-heading">
         <div><div className="eyebrow">YOUR REQUEST UPDATES</div><h2>Request mailbox</h2></div>
-        <span className="count-badge">{pagination?.total ?? requests.length}</span>
+        <span className="count-badge">{requests.length}</span>
       </div>
       {requests.length ? (
         <div className="request-list">
@@ -603,13 +450,11 @@ function RequestMailbox({ requests, pagination, onPageChange }) {
                 </p>
               )}
               {request.status === "declined" && <p className="request-decline-reason"><strong>Admin's reason:</strong> {request.declineReason || "No reason was provided."}</p>}
-              {request.reviewedAt && <p className="mailbox-update">Reviewed {new Date(request.reviewedAt).toLocaleDateString()}{request.reviewedBy?.name ? ` by ${request.reviewedBy.name}` : ""}.</p>}
               {request.status === "reviewed" && <p className="mailbox-update">Your request has been reviewed.</p>}
             </article>
           ))}
         </div>
       ) : <div className="empty-state"><p>Your submitted requests and their updates will appear here.</p></div>}
-      {pagination && onPageChange && pagination.pages > 1 && <Pagination pagination={pagination} onPageChange={onPageChange} />}
     </section>
   );
 }
@@ -638,141 +483,40 @@ function Dashboard({ user, token, onLogout }) {
   const [submitting, setSubmitting] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
   const [residentPage, setResidentPage] = useState("resident-calendar");
-  const [openRequestCount, setOpenRequestCount] = useState(0);
-  const [accountPagination, setAccountPagination] = useState({ page: 1, limit: 25, total: 0, pages: 0 });
-  const [accountCounts, setAccountCounts] = useState({ admins: 0, residents: 0 });
-  const [accountPage, setAccountPage] = useState(1);
-  const [accountSearchInput, setAccountSearchInput] = useState("");
-  const [accountSearch, setAccountSearch] = useState("");
-  const [accountRole, setAccountRole] = useState("");
-  const [accountResidencyId, setAccountResidencyId] = useState("");
-  const [accountLoading, setAccountLoading] = useState(false);
-  const [requestPageData, setRequestPageData] = useState([]);
-  const [requestPagination, setRequestPagination] = useState({ page: 1, limit: 25, total: 0, pages: 0 });
-  const [requestPage, setRequestPage] = useState(1);
-  const [requestFilters, setRequestFilters] = useState({ status: "", kind: "", from: "", to: "", search: "", sort: "newest" });
-  const [requestFilterDraft, setRequestFilterDraft] = useState({ status: "", kind: "", from: "", to: "", sort: "newest" });
-  const [requestSearchInput, setRequestSearchInput] = useState("");
-  const [requestListLoading, setRequestListLoading] = useState(false);
-  const [mailboxRequests, setMailboxRequests] = useState([]);
-  const [mailboxPagination, setMailboxPagination] = useState({ page: 1, limit: 25, total: 0, pages: 0 });
-  const [mailboxPage, setMailboxPage] = useState(1);
-  const accountLoadVersion = useRef(0);
-  const requestLoadVersion = useRef(0);
-  const mailboxLoadVersion = useRef(0);
   const [adminPage, setAdminPage] = useState(() => {
     const page = window.location.hash.slice(1);
     return adminPageLinks.some(([id]) => id === page) ? page : "admin-schedules";
   });
   const admin = user.role === "admin";
   const superadmin = user.role === "superadmin";
-  const adminRequestView = (admin && adminPage === "admin-requests") || (superadmin && superadminView === "requests");
-  const accountListView = (admin && adminPage === "admin-residents") || (superadmin && superadminView === "accounts");
-  const mailboxView = user.role === "user" && residentPage === "resident-mailbox";
-
-  function queryString(values) {
-    const params = new URLSearchParams();
-    Object.entries(values).forEach(([key, value]) => {
-      if (value !== "" && value !== undefined && value !== null) params.set(key, value);
-    });
-    return params.toString();
-  }
-
-  async function loadAccounts(page = accountPage, search = accountSearch, role = accountRole, residencyId = accountResidencyId) {
-    const loadVersion = ++accountLoadVersion.current;
-    setAccountLoading(true);
-    try {
-      const query = queryString({ page, limit: 25, search, role, residencyId });
-      const result = await api(`/users?${query}`, {}, token);
-      if (loadVersion !== accountLoadVersion.current) return;
-      if (page > Math.max(1, result.pagination.pages)) {
-        setAccountPage(Math.max(1, result.pagination.pages));
-        return;
-      }
-      setUsers(result.users);
-      setAccountPagination(result.pagination);
-      setAccountCounts(result.counts);
-    } catch (error) {
-      if (loadVersion === accountLoadVersion.current) setNotice({ message: error.message, isError: true });
-    } finally {
-      if (loadVersion === accountLoadVersion.current) setAccountLoading(false);
-    }
-  }
-
-  async function loadAdminRequests(page = requestPage, filters = requestFilters) {
-    const loadVersion = ++requestLoadVersion.current;
-    setRequestListLoading(true);
-    try {
-      const query = queryString({ ...filters, page, limit: 25 });
-      const result = await api(`/requests?${query}`, {}, token);
-      if (loadVersion !== requestLoadVersion.current) return;
-      if (page > Math.max(1, result.pagination.pages)) {
-        setRequestPage(Math.max(1, result.pagination.pages));
-        return;
-      }
-      setRequestPageData(result.requests);
-      setRequestPagination(result.pagination);
-      setOpenRequestCount(result.counts.pending);
-    } catch (error) {
-      if (loadVersion === requestLoadVersion.current) setNotice({ message: error.message, isError: true });
-    } finally {
-      if (loadVersion === requestLoadVersion.current) setRequestListLoading(false);
-    }
-  }
-
-  async function loadMailbox(page = mailboxPage) {
-    const loadVersion = ++mailboxLoadVersion.current;
-    try {
-      const result = await api(`/requests?${queryString({ page, limit: 25, sort: "newest" })}`, {}, token);
-      if (loadVersion !== mailboxLoadVersion.current) return;
-      setMailboxRequests(result.requests);
-      setMailboxPagination(result.pagination);
-    } catch (error) {
-      if (loadVersion === mailboxLoadVersion.current) setNotice({ message: error.message, isError: true });
-    }
-  }
 
   async function refreshDashboard() {
-    const requestPath = admin || superadmin
-      ? "/requests?status=pending&limit=3&sort=oldest"
-      : "/requests?status=approved&limit=100&sort=scheduled";
     const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
-      api(admin || superadmin ? "/schedules?includeHistory=true" : "/schedules", {}, token),
-      user.role === "user" || admin || superadmin ? api(requestPath, {}, token) : Promise.resolve({ requests: [], counts: { pending: 0 } }),
-      admin || superadmin ? api(`/users?${queryString({ page: accountPage, limit: 25, search: accountSearch, role: accountRole, residencyId: accountResidencyId })}`, {}, token) : Promise.resolve({ users: [], pagination: accountPagination, counts: accountCounts }),
+      api("/schedules", {}, token),
+      admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+      admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
       superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
     ]);
     setSchedules(scheduleResult.schedules);
     setRequests(requestResult.requests);
-    setOpenRequestCount(requestResult.counts.pending);
     setUsers(userResult.users);
-    setAccountPagination(userResult.pagination);
-    setAccountCounts(userResult.counts);
     setResidencies(residencyResult.residencies);
-    if (adminRequestView) await loadAdminRequests();
-    if (mailboxView) await loadMailbox();
   }
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const requestPath = admin || superadmin
-          ? "/requests?status=pending&limit=3&sort=oldest"
-          : "/requests?status=approved&limit=100&sort=scheduled";
         const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
-          api(admin || superadmin ? "/schedules?includeHistory=true" : "/schedules", {}, token),
-          admin || superadmin || user.role === "user" ? api(requestPath, {}, token) : Promise.resolve({ requests: [], counts: { pending: 0 } }),
-          admin || superadmin ? api("/users?page=1&limit=25", {}, token) : Promise.resolve({ users: [], pagination: { page: 1, limit: 25, total: 0, pages: 0 }, counts: { admins: 0, residents: 0 } }),
+          api("/schedules", {}, token),
+          admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
+          admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
           superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
         ]);
         if (active) {
           setSchedules(scheduleResult.schedules);
           setRequests(requestResult.requests);
-          setOpenRequestCount(requestResult.counts.pending);
           setUsers(userResult.users);
-          setAccountPagination(userResult.pagination);
-          setAccountCounts(userResult.counts);
           setResidencies(residencyResult.residencies);
         }
       } catch (error) {
@@ -784,18 +528,6 @@ function Dashboard({ user, token, onLogout }) {
     load();
     return () => { active = false; };
   }, [admin, superadmin, token]);
-
-  useEffect(() => {
-    if (adminRequestView) loadAdminRequests(requestPage, requestFilters);
-  }, [adminRequestView, requestPage, requestFilters, token]);
-
-  useEffect(() => {
-    if (accountListView) loadAccounts(accountPage, accountSearch, accountRole, accountResidencyId);
-  }, [accountListView, accountPage, accountSearch, accountRole, accountResidencyId, token]);
-
-  useEffect(() => {
-    if (mailboxView) loadMailbox(mailboxPage);
-  }, [mailboxView, mailboxPage, token]);
 
   async function submitSchedule(event) {
     event.preventDefault();
@@ -818,54 +550,6 @@ function Dashboard({ user, token, onLogout }) {
       setNotice({ message: error.message, isError: true });
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function updateSchedule(id, data) {
-    setNotice(null);
-    try {
-      const result = await api(`/schedules/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify(data)
-      }, token);
-      let refreshError;
-      try {
-        await refreshDashboard();
-      } catch (error) {
-        refreshError = error;
-      }
-      const message = result.notification.sent
-          ? `Schedule updated and SMS sent to ${result.notification.delivered} resident(s).`
-          : `Schedule updated. SMS notification was not sent: ${result.notification.reason}`;
-      setNotice({ message: refreshError ? `${message} Dashboard refresh failed: ${refreshError.message}` : message, isError: Boolean(refreshError) });
-      return true;
-    } catch (error) {
-      setNotice({ message: error.message, isError: true });
-      return error.message;
-    }
-  }
-
-  async function cancelSchedule(id, reason) {
-    setNotice(null);
-    try {
-      const result = await api(`/schedules/${encodeURIComponent(id)}/cancel`, {
-        method: "PATCH",
-        body: JSON.stringify({ reason })
-      }, token);
-      let refreshError;
-      try {
-        await refreshDashboard();
-      } catch (error) {
-        refreshError = error;
-      }
-      const message = result.notification.sent
-          ? `Schedule cancelled and SMS sent to ${result.notification.delivered} resident(s).`
-          : `Schedule cancelled. SMS notification was not sent: ${result.notification.reason}`;
-      setNotice({ message: refreshError ? `${message} Dashboard refresh failed: ${refreshError.message}` : message, isError: Boolean(refreshError) });
-      return true;
-    } catch (error) {
-      setNotice({ message: error.message, isError: true });
-      return error.message;
     }
   }
 
@@ -958,16 +642,12 @@ function Dashboard({ user, token, onLogout }) {
         method: "PATCH",
         body: JSON.stringify({ status: "approved", scheduledDate })
       }, token);
-      let refreshError;
-      try {
-        await refreshDashboard();
-      } catch (error) {
-        refreshError = error;
-      }
-      const message = result.notification.sent
+      await refreshDashboard();
+      setNotice({
+        message: result.notification.sent
           ? "Request approved and resident notified by SMS."
-          : `Request approved. SMS was not sent: ${result.notification.reason}`;
-      setNotice({ message: refreshError ? `${message} Dashboard refresh failed: ${refreshError.message}` : message, isError: Boolean(refreshError) });
+          : `Request approved. SMS was not sent: ${result.notification.reason}`
+      });
       return true;
     } catch (error) {
       setNotice({ message: error.message, isError: true });
@@ -982,16 +662,12 @@ function Dashboard({ user, token, onLogout }) {
         method: "PATCH",
         body: JSON.stringify({ status: "declined", declineReason })
       }, token);
-      let refreshError;
-      try {
-        await refreshDashboard();
-      } catch (error) {
-        refreshError = error;
-      }
-      const message = result.notification.sent
+      await refreshDashboard();
+      setNotice({
+        message: result.notification.sent
           ? "Request declined and resident notified by SMS."
-          : `Request declined. SMS was not sent: ${result.notification.reason}`;
-      setNotice({ message: refreshError ? `${message} Dashboard refresh failed: ${refreshError.message}` : message, isError: Boolean(refreshError) });
+          : `Request declined. SMS was not sent: ${result.notification.reason}`
+      });
       return true;
     } catch (error) {
       setNotice({ message: error.message, isError: true });
@@ -999,8 +675,33 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
-  const adminCount = accountCounts.admins;
-  const residentCount = accountCounts.residents;
+  async function deleteSchedule(id, label) {
+    if (!window.confirm(`Delete the collection schedule for "${label}"? Residents will no longer see it in their calendar.`)) return;
+    setNotice(null);
+    try {
+      await api(`/schedules/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setNotice({ message: "Collection schedule deleted." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
+  async function deleteServiceRequest(id, label) {
+    if (!window.confirm(`Delete this ${label.toLowerCase()} service request? This cannot be undone.`)) return;
+    setNotice(null);
+    try {
+      await api(`/requests/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setNotice({ message: "Service request deleted." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
+  const openRequestCount = requests.filter((request) => request.status === "pending").length;
+  const adminCount = users.filter((account) => account.role === "admin").length;
+  const residentCount = users.filter((account) => account.role === "user" || account.role === "resident").length;
 
   return (
     <main className="dashboard-shell">
@@ -1043,11 +744,11 @@ function Dashboard({ user, token, onLogout }) {
               <div className="dashboard-grid superadmin-overview-grid">
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Upcoming collections</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("collections")}>Manage</button></div>
-                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.filter((schedule) => schedule.status !== "cancelled").length ? <div className="schedule-list">{schedules.filter((schedule) => schedule.status !== "cancelled").slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onEdit={updateSchedule} onCancel={cancelSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No upcoming collections scheduled.</p></div>}
                 </section>
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setSuperadminView("requests")}>View all</button></div>
-                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                          {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
             </section>
@@ -1064,22 +765,9 @@ function Dashboard({ user, token, onLogout }) {
           )}
           {superadminView === "accounts" && (
             <section className="superadmin-content panel">
-              <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Manage accounts</h2></div><span className="count-badge">{accountPagination.total}</span></div>
+              <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Manage accounts</h2></div><span className="count-badge">{users.length}</span></div>
               <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} />
-              <AccountFilters
-                searchInput={accountSearchInput}
-                onSearchInput={setAccountSearchInput}
-                role={accountRole}
-                onRoleChange={(value) => { setAccountRole(value); setAccountPage(1); }}
-                residencyId={accountResidencyId}
-                onResidencyChange={(value) => { setAccountResidencyId(value); setAccountPage(1); }}
-                residencies={residencies}
-                admin={false}
-                onApply={() => { setAccountSearch(accountSearchInput.trim()); setAccountPage(1); }}
-                onReset={() => { setAccountSearchInput(""); setAccountSearch(""); setAccountRole(""); setAccountResidencyId(""); setAccountPage(1); }}
-              />
-              {accountLoading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div></article>)}</div> : <div className="empty-state"><p>No accounts match these filters.</p></div>}
-              <Pagination pagination={accountPagination} onPageChange={setAccountPage} />
+              {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div></article>)}</div> : <div className="empty-state"><p>No accounts yet. Create an admin or resident account above.</p></div>}
             </section>
           )}
           {superadminView === "collections" && (
@@ -1087,32 +775,14 @@ function Dashboard({ user, token, onLogout }) {
               <div className="panel">
                 <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
                 <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onEdit={updateSchedule} onCancel={cancelSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
             </section>
           )}
           {superadminView === "requests" && (
             <section className="panel admin-request-content">
               <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-              <RequestFilters
-                filters={requestFilterDraft}
-                searchInput={requestSearchInput}
-                onSearchInput={setRequestSearchInput}
-                onChange={(field, value) => setRequestFilterDraft((current) => ({ ...current, [field]: value }))}
-                onApply={() => {
-                  setRequestFilters({ ...requestFilterDraft, search: requestSearchInput.trim() });
-                  setRequestPage(1);
-                }}
-                onReset={() => {
-                  const defaults = { status: "", kind: "", from: "", to: "", sort: "newest" };
-                  setRequestFilterDraft(defaults);
-                  setRequestSearchInput("");
-                  setRequestFilters({ ...defaults, search: "" });
-                  setRequestPage(1);
-                }}
-              />
-              {requestListLoading ? <div className="empty-state"><p>Loading requests...</p></div> : requestPageData.length ? <div className="request-list">{requestPageData.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No requests match these filters.</p></div>}
-              <Pagination pagination={requestPagination} onPageChange={setRequestPage} />
+              {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? <div className="request-list">{requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}
             </section>
           )}
         </>
@@ -1128,11 +798,11 @@ function Dashboard({ user, token, onLogout }) {
               <div className="dashboard-grid superadmin-overview-grid">
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Upcoming collections</h2></div><button className="text-action" type="button" onClick={() => setAdminPage("admin-schedules")}>Manage</button></div>
-                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.filter((schedule) => schedule.status !== "cancelled").length ? <div className="schedule-list">{schedules.filter((schedule) => schedule.status !== "cancelled").slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onEdit={updateSchedule} onCancel={cancelSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                  {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.slice(0, 4).map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
                 </section>
                 <section className="panel">
                   <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Open requests</h2></div><button className="text-action" type="button" onClick={() => setAdminPage("admin-requests")}>View all</button></div>
-                  {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
+                  {loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.filter((request) => request.status === "pending").length ? <div className="request-list">{requests.filter((request) => request.status === "pending").slice(0, 3).map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No open requests to review.</p></div>}
                 </section>
               </div>
             </section>
@@ -1142,53 +812,22 @@ function Dashboard({ user, token, onLogout }) {
               <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
               <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
               <div className="schedule-list">
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onEdit={updateSchedule} onCancel={cancelSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
             </section>
           )}
           {adminPage === "admin-requests" && (
             <section className="panel admin-request-content">
               <div className="panel-heading"><div><div className="eyebrow">RESIDENT SUPPORT</div><h2>Service requests</h2></div><span className="count-badge">{openRequestCount} open</span></div>
-              <RequestFilters
-                filters={requestFilterDraft}
-                searchInput={requestSearchInput}
-                onSearchInput={setRequestSearchInput}
-                onChange={(field, value) => setRequestFilterDraft((current) => ({ ...current, [field]: value }))}
-                onApply={() => {
-                  setRequestFilters({ ...requestFilterDraft, search: requestSearchInput.trim() });
-                  setRequestPage(1);
-                }}
-                onReset={() => {
-                  const defaults = { status: "", kind: "", from: "", to: "", sort: "newest" };
-                  setRequestFilterDraft(defaults);
-                  setRequestSearchInput("");
-                  setRequestFilters({ ...defaults, search: "" });
-                  setRequestPage(1);
-                }}
-              />
-              {requestListLoading ? <div className="empty-state"><p>Loading requests...</p></div> : requestPageData.length ? <div className="request-list">{requestPageData.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} />)}</div> : <div className="empty-state"><span>♡</span><p>No requests match these filters.</p></div>}
-              <Pagination pagination={requestPagination} onPageChange={setRequestPage} />
+              <div className="request-list">{loading ? <div className="empty-state"><p>Loading requests...</p></div> : requests.length ? requests.map((request) => <RequestCard key={request._id} request={request} onApprove={approveRequest} onDecline={declineRequest} onDelete={deleteServiceRequest} />) : <div className="empty-state"><span>♡</span><p>No resident requests yet.</p></div>}</div>
             </section>
           )}
           {adminPage === "admin-residents" && (
             <section className="management-grid admin-residents-section">
               <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{accountPagination.total}</span></div>
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
                 <AccountForm onSubmit={createAccount} admin residencies={residencies} />
-                <AccountFilters
-                  searchInput={accountSearchInput}
-                  onSearchInput={setAccountSearchInput}
-                  role=""
-                  onRoleChange={() => {}}
-                  residencyId=""
-                  onResidencyChange={() => {}}
-                  residencies={[]}
-                  admin
-                  onApply={() => { setAccountSearch(accountSearchInput.trim()); setAccountPage(1); }}
-                  onReset={() => { setAccountSearchInput(""); setAccountSearch(""); setAccountPage(1); }}
-                />
-                {accountLoading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div> : <div className="empty-state"><p>No residents match this search.</p></div>}
-                <Pagination pagination={accountPagination} onPageChange={setAccountPage} />
+                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account above.</p></div>}
               </div>
             </section>
           )}
@@ -1201,7 +840,7 @@ function Dashboard({ user, token, onLogout }) {
               <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
             </section>
           )}
-          {residentPage === "resident-mailbox" && <RequestMailbox requests={mailboxRequests} pagination={mailboxPagination} onPageChange={setMailboxPage} />}
+          {residentPage === "resident-mailbox" && <RequestMailbox requests={requests} />}
         </>
       )}
       <Footer />
