@@ -10,9 +10,9 @@ const adminPageLinks = [
   ["admin-residents", "Residents"]
 ];
 const residentPageLinks = [
-  ["resident-overview", "Overview"],
-  ["resident-collections", "Collections"],
-  ["resident-requests", "Request"]
+  ["resident-calendar", "Calendar"],
+  ["resident-requests", "Request"],
+  ["resident-mailbox", "Mailbox"]
 ];
 
 function localDateKey(date) {
@@ -482,7 +482,7 @@ function Dashboard({ user, token, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
-  const [residentPage, setResidentPage] = useState("resident-overview");
+  const [residentPage, setResidentPage] = useState("resident-calendar");
   const [adminPage, setAdminPage] = useState(() => {
     const page = window.location.hash.slice(1);
     return adminPageLinks.some(([id]) => id === page) ? page : "admin-schedules";
@@ -709,7 +709,7 @@ function Dashboard({ user, token, onLogout }) {
       <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
       {!superadmin && (
-        <nav className="dashboard-tabs" aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}>
+        <nav className={`dashboard-tabs${admin ? "" : " resident-dashboard-tabs"}`} aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}>
           {(admin ? adminPageLinks : residentPageLinks).map(([id, label]) => {
             const selected = (admin ? adminPage : residentPage) === id;
             return (
@@ -834,22 +834,13 @@ function Dashboard({ user, token, onLogout }) {
         </>
       ) : (
         <>
-          {residentPage === "resident-overview" && (
-            <>
-              <section className="dashboard-grid">
-                <ResidentCalendar schedules={schedules} requests={requests} />
-                <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
-              </section>
-              <RequestMailbox requests={requests} />
-            </>
-          )}
-          {residentPage === "resident-collections" && <ResidentCalendar schedules={schedules} requests={requests} />}
+          {residentPage === "resident-calendar" && <ResidentCalendar schedules={schedules} requests={requests} />}
           {residentPage === "resident-requests" && (
-            <section className="dashboard-grid">
+            <section className="resident-request-page">
               <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
-              <RequestMailbox requests={requests} />
             </section>
           )}
+          {residentPage === "resident-mailbox" && <RequestMailbox requests={requests} />}
         </>
       )}
       <Footer />

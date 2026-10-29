@@ -133,6 +133,7 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .dashboard-tab.active, .dashboard-tab.active:hover { background: #304f3a; color: #fff; }
 .dashboard-tab span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
 .dashboard-tab.active span { background: #fff; color: #304f3a; }
+.resident-dashboard-tabs .dashboard-tab { flex: 1 1 0; justify-content: center; }
 .superadmin-content { margin-bottom: 20px; }
 .admin-overview-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -182,6 +183,18 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .calendar-event strong { color: #354236; font-size: 10px; }
 .calendar-event p, .calendar-no-events { margin: 0; color: #788174; font-size: 9px; line-height: 1.5; }
 .approved-request-event { border-left: 3px solid #78916f; }
+.resident-request-page { width: 100%; }
+.resident-calendar, .resident-request-page > .request-panel, .request-mailbox { min-height: 560px; }
+.resident-calendar, .resident-request-page > .request-panel { padding: 28px !important; }
+.resident-calendar .calendar-grid { gap: 7px; }
+.resident-calendar .calendar-day { min-height: 56px; padding-top: 11px; }
+.resident-request-page > .request-panel { display: flex; flex-direction: column; }
+.resident-request-page > .request-panel .form-grid { flex: 1; }
+.resident-request-page > .request-panel textarea { min-height: 190px; }
+.request-mailbox .request-list { gap: 14px; }
+.request-mailbox .mailbox-message { padding: 20px; }
+.request-mailbox .mailbox-message > p { margin-bottom: 12px; }
+.request-mailbox { margin-top: 0; }
 @media (max-width: 760px) {
   .overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .overview-stat { padding: 13px; }
@@ -192,4 +205,90 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
   .password-change-layout { grid-template-columns: 1fr; }
   .admin-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .request-decision-dialog { padding: 18px; }
+}
+.dashboard-shell {
+  max-width: 1600px;
+  padding-right: clamp(18px, 4vw, 56px);
+  padding-left: clamp(18px, 4vw, 56px);
+}
+.dashboard-shell .user-name { font-size: 13px; }
+.dashboard-shell .role-chip { font-size: 10px; }
+.dashboard-shell .button { font-size: 14px; }
+.dashboard-shell .button-small { font-size: 12px; }
+.dashboard-heading { padding-top: 42px; padding-bottom: 32px; }
+.dashboard-heading h1 { font-size: clamp(32px, 2.5vw, 40px); }
+.dashboard-heading p, .dashboard-shell .notice { font-size: 14px; }
+.dashboard-shell .eyebrow { font-size: 10px; }
+.dashboard-tabs { gap: 7px; padding: 6px; }
+.dashboard-tab { padding: 11px 16px; font-size: 13px; }
+.dashboard-tab span { font-size: 10px; }
+.dashboard-grid, .management-grid { gap: 20px; }
+.dashboard-shell .panel { padding: 22px; }
+.dashboard-shell .panel-heading { margin-bottom: 18px; }
+.dashboard-shell .panel-heading h2 { font-size: 21px; }
+.dashboard-shell .panel-description { max-width: 480px; font-size: 14px; }
+.dashboard-shell .form-grid { gap: 15px; }
+.dashboard-shell .form-grid label, .dashboard-shell .inline-form label,
+.dashboard-shell .residency-create-form label, .dashboard-shell .request-dialog-form label {
+  font-size: 12px;
+}
+.dashboard-shell .form-grid input, .dashboard-shell .form-grid select,
+.dashboard-shell .form-grid textarea, .dashboard-shell .inline-form input,
+.dashboard-shell .inline-form select, .dashboard-shell .residency-create-form input {
+  padding: 12px 13px;
+  font-size: 14px;
+}
+.dashboard-shell .form-grid label small { font-size: 11px; }
+.dashboard-shell .status-pill { font-size: 10px; }
+.dashboard-shell .count-badge { font-size: 12px; }
+.dashboard-shell .schedule-card { gap: 16px; padding: 15px; }
+.dashboard-shell .date-block { flex-basis: 50px; height: 54px; }
+.dashboard-shell .date-block strong { font-size: 18px; }
+.dashboard-shell .date-block span { font-size: 10px; }
+.dashboard-shell .schedule-info h3, .dashboard-shell .request-card h3,
+.dashboard-shell .mailbox-message h3 { font-size: 15px; }
+.dashboard-shell .schedule-info p, .dashboard-shell .request-card > small,
+.dashboard-shell .resident-row small { font-size: 12px; }
+.dashboard-shell .request-card { padding: 16px; gap: 9px; }
+.dashboard-shell .request-card p, .dashboard-shell .mailbox-message > p { font-size: 13px; }
+.dashboard-shell .request-meta { font-size: 11px; }
+.dashboard-shell .empty-state p { font-size: 12px; }
+.dashboard-shell .overview-stat span { font-size: 12px; }
+.dashboard-shell .overview-stat small { font-size: 11px; }
+.dashboard-shell .overview-stat strong { font-size: 30px; }
+.dashboard-shell .text-action { font-size: 12px; }
+.dashboard-shell .resident-row { padding: 14px; }
+.dashboard-shell .resident-row strong { font-size: 14px; }
+.dashboard-shell .resident-row > span, .dashboard-shell .resident-admin-actions select { font-size: 11px; }
+.dashboard-shell .calendar-month-button { width: 36px; height: 36px; }
+.dashboard-shell .calendar-weekday { padding: 8px 0; font-size: 11px; }
+.dashboard-shell .calendar-day { min-height: 48px; padding: 9px 3px; font-size: 13px; }
+.dashboard-shell .calendar-day-indicators { min-height: 8px; }
+.dashboard-shell .calendar-day-indicators i, .dashboard-shell .calendar-legend i { width: 7px; height: 7px; }
+.dashboard-shell .calendar-legend { gap: 16px; margin-top: 14px; }
+.dashboard-shell .calendar-legend span { font-size: 11px; }
+.dashboard-shell .calendar-day-details { margin-top: 18px; padding-top: 16px; }
+.dashboard-shell .calendar-day-details h3 { font-size: 15px; }
+.dashboard-shell .calendar-event { gap: 8px; padding: 13px; }
+.dashboard-shell .calendar-event strong { font-size: 13px; }
+.dashboard-shell .calendar-event p, .dashboard-shell .calendar-no-events { font-size: 12px; }
+.dashboard-shell .mailbox-message { padding: 16px; }
+.dashboard-shell .request-dialog-summary, .dashboard-shell .request-dialog-error,
+.dashboard-shell .request-confirmation p { font-size: 13px; }
+.dashboard-shell .request-dialog-hint { font-size: 12px; }
+@media (max-width: 760px) {
+  .dashboard-shell { padding-right: 5%; padding-left: 5%; }
+  .dashboard-heading { padding-top: 32px; padding-bottom: 25px; }
+}
+@media (max-width: 420px) {
+  .dashboard-heading h1 { font-size: 28px; }
+  .dashboard-shell .panel { padding: 16px; }
+  .dashboard-tab { padding: 10px 12px; }
+}
+@media (max-width: 760px) {
+  .resident-calendar, .resident-request-page > .request-panel, .request-mailbox { min-height: 0; }
+  .resident-calendar, .resident-request-page > .request-panel { padding: 20px !important; }
+  .resident-calendar .calendar-day { min-height: 48px; }
+  .resident-request-page > .request-panel textarea { min-height: 150px; }
+  .request-mailbox .mailbox-message { padding: 16px; }
 }
