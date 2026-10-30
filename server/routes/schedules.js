@@ -5,7 +5,7 @@ import { authenticate, requireAnyRole } from "../middleware/auth.js";
 import { Schedule } from "../models/Schedule.js";
 import { User } from "../models/User.js";
 import { broadcastSms } from "../services/sms.js";
-import { formatDateKey, formatTime24Hour } from "../utils/dateTime.js";
+import { currentManilaDateKey, formatDateKey, formatTime24Hour } from "../utils/dateTime.js";
 
 const router = Router();
 const scheduleSchema = z.object({
@@ -21,13 +21,34 @@ router.use(authenticate);
 
 router.get("/", async (request, response, next) => {
   try {
-    const filter = { date: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } };
-    if (request.user.role !== "superadmin") filter.residencyId = request.user.residencyId;
-    const schedules = await Schedule.find(filter)
+    const filter = {};
+    if (request.user.role !== "superadmin") {
+      if (!request.user.residencyId) {
+        return response.status(403).json({ error: "Your account needs a residency assignment to view collection schedules." });
+      }
+      filter.residencyId = new mongoose.Types.ObjectId(String(request.user.residencyId));
+    }
+    if (request.query.month !== undefined) {
+      if (!["admin", "superadmin"].includes(request.user.role)) {
+        return response.status(403).json({ error: "Only administrators can view collection history." });
+      }
+      const month = String(request.query.month);
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return response.status(400).json({ error: "Provide a valid history month in YYYY-MM format." });
+      }
+      const [year, monthNumber] = month.split("-").map(Number);
+      filter.date = {
+        $gte: new Date(Date.UTC(year, monthNumber - 1, 1)),
+        $lt: new Date(Date.UTC(year, monthNumber, 1))
+      };
+    } else {
+      filter.date = { $gte: new Date(`${currentManilaDateKey()}T00:00:00.000Z`) };
+    }
+    const schedulesQuery = Schedule.find(filter)
       .sort({ date: 1 })
-      .limit(100)
-      .populate("residencyId", "name")
-      .lean();
+      .populate("residencyId", "name");
+    if (request.query.month === undefined) schedulesQuery.limit(100);
+    const schedules = await schedulesQuery.lean();
     return response.json({ schedules });
   } catch (error) {
     return next(error);

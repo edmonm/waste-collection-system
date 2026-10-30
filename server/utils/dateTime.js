@@ -6,6 +6,17 @@ export function formatDateKey(dateKey) {
   }).format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
+export function currentManilaDateKey() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Manila"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export function formatTime24Hour(time) {
   const [hours, minutes] = time.split(":").map(Number);
   return new Intl.DateTimeFormat("en-PH", {

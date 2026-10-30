@@ -110,14 +110,16 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
   }
 });
 
-router.delete("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
+router.delete("/:id", requireAnyRole("admin", "superadmin", "user"), async (request, response, next) => {
   try {
     if (!mongoose.isValidObjectId(request.params.id)) {
       return response.status(400).json({ error: "Invalid request identifier." });
     }
     const filter = request.user.role === "superadmin"
       ? { _id: request.params.id }
-      : { _id: request.params.id, residencyId: request.user.residencyId };
+      : request.user.role === "admin"
+        ? { _id: request.params.id, residencyId: request.user.residencyId }
+        : { _id: request.params.id, resident: request.user.id, residencyId: request.user.residencyId };
     const serviceRequest = await ServiceRequest.findOneAndDelete(filter);
     if (!serviceRequest) return response.status(404).json({ error: "Service request not found." });
     return response.json({ message: "Service request deleted." });

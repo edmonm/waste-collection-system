@@ -22,6 +22,17 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+function manilaDateKey(date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Manila"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function dateKeyDate(dateKey) {
   const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -187,7 +198,7 @@ function Landing({ onAuthenticated, onPasswordChangeRequired, onCancelPasswordCh
   );
 }
 
-function ScheduleCard({ schedule, onDelete }) {
+function ScheduleCard({ schedule, onDelete, showResidency = false }) {
   const date = dateKeyDate(schedule.date);
   return (
     <article className="schedule-card">
@@ -195,7 +206,9 @@ function ScheduleCard({ schedule, onDelete }) {
       <div className="schedule-info">
         <span className="status-pill">{schedule.wasteType}</span>
         <h3>{schedule.area}</h3>
-        <p>{date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}{schedule.notes ? ` · ${schedule.notes}` : ""}</p>
+        <p>{date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+        {showResidency && schedule.residencyId?.name && <p>Residency: {schedule.residencyId.name}</p>}
+        {schedule.notes && <p>{showResidency ? "Notes: " : ""}{schedule.notes}</p>}
         <p>Estimated arrival: {formatArrivalTime(schedule.estimatedArrivalTime)}</p>
         {onDelete && <button className="button button-small button-delete" type="button" onClick={() => onDelete(schedule._id, schedule.area)}>Delete collection</button>}
       </div>
@@ -203,13 +216,67 @@ function ScheduleCard({ schedule, onDelete }) {
   );
 }
 
+function CollectionHistoryDialog({ open, onClose, month, onMonthChange, schedules, loading, scopeLabel }) {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  function moveMonth(offset) {
+    const [year, monthNumber] = month.split("-").map(Number);
+    const nextMonth = new Date(year, monthNumber - 1 + offset, 1);
+    onMonthChange(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const [year, monthNumber] = month.split("-").map(Number);
+  const monthDate = new Date(year, monthNumber - 1, 1);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="collection-history-dialog"
+      aria-labelledby="collection-history-title"
+      onClose={onClose}
+    >
+      <div className="collection-history-heading">
+        <div>
+          <div className="eyebrow">COLLECTION ARCHIVE</div>
+          <h2 id="collection-history-title">Collection history</h2>
+          <p className="collection-history-scope">{scopeLabel}</p>
+        </div>
+        <button className="request-dialog-close" type="button" aria-label="Close history" onClick={onClose}>×</button>
+      </div>
+      <div className="collection-history-controls">
+        <button type="button" className="calendar-month-button" aria-label="Previous month" onClick={() => moveMonth(-1)}>‹</button>
+        <h3>{monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>
+        <button type="button" className="calendar-month-button" aria-label="Next month" onClick={() => moveMonth(1)}>›</button>
+        <span className="count-badge">{schedules.length}</span>
+      </div>
+      <div className="collection-history-list" aria-live="polite">
+        {loading ? <div className="empty-state"><p>Loading collection history...</p></div> : schedules.length ? schedules.map((schedule) => (
+          <ScheduleCard key={schedule._id} schedule={schedule} showResidency />
+        )) : <div className="empty-state"><span>▦</span><p>No collection schedules were published this month.</p></div>}
+      </div>
+    </dialog>
+  );
+}
+
 function ResidentCalendar({ schedules, requests }) {
   const today = new Date();
+  const [todayKey, setTodayKey] = useState(() => manilaDateKey(new Date()));
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(localDateKey(today));
   const eventsByDate = new Map();
+  useEffect(() => {
+    const interval = window.setInterval(() => setTodayKey(manilaDateKey(new Date())), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
   schedules.forEach((schedule) => {
     const dateKey = schedule.date.slice(0, 10);
+    if (dateKey < todayKey) return;
     eventsByDate.set(dateKey, [...(eventsByDate.get(dateKey) || []), { type: "collection", schedule }]);
   });
   requests.forEach((request) => {
@@ -285,7 +352,7 @@ function ResidentCalendar({ schedules, requests }) {
             <span className="status-pill">Approved request</span>
             <strong>{event.request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</strong>
             <p>{event.request.description}</p>
-            {event.request.scheduledTime && <p>Estimated collection time: {formatArrivalTime(event.request.scheduledTime)}</p>}
+            <p>Estimated collection time: {event.request.scheduledTime ? formatArrivalTime(event.request.scheduledTime) : "Not provided"}</p>
           </article>
         )) : <p className="calendar-no-events">No collections or approved requests for this day.</p>}
       </div>
@@ -435,7 +502,7 @@ function RequestCard({ request, onApprove, onDecline, onDelete }) {
   );
 }
 
-function RequestMailbox({ requests }) {
+function RequestMailbox({ requests, onDelete }) {
   return (
     <section className="panel request-mailbox" id="resident-mailbox">
       <div className="panel-heading">
@@ -454,12 +521,26 @@ function RequestMailbox({ requests }) {
               <p>{request.description}</p>
               {request.status === "pending" && <p className="mailbox-update">Your request is waiting for admin review.</p>}
               {request.status === "approved" && (
-                <p className="mailbox-update">
-                  Your request was approved{request.scheduledDate ? ` for ${dateKeyDate(request.scheduledDate).toLocaleDateString()}${request.scheduledTime ? ` at ${formatArrivalTime(request.scheduledTime)}` : ""}` : ""}.
-                </p>
+                <>
+                  <p className="mailbox-update">
+                    Your request was approved{request.scheduledDate ? ` for ${dateKeyDate(request.scheduledDate).toLocaleDateString()}.` : "."}
+                  </p>
+                  {request.scheduledDate && (
+                    <p className="mailbox-update">
+                      Estimated collection time: {request.scheduledTime ? formatArrivalTime(request.scheduledTime) : "Not provided"}.
+                    </p>
+                  )}
+                </>
               )}
               {request.status === "declined" && <p className="request-decline-reason"><strong>Admin's reason:</strong> {request.declineReason || "No reason was provided."}</p>}
               {request.status === "reviewed" && <p className="mailbox-update">Your request has been reviewed.</p>}
+              <button
+                className="button button-small button-delete"
+                type="button"
+                onClick={() => onDelete(request._id, request.kind === "missed_pickup" ? "Missed pickup" : "Special request", request.status)}
+              >
+                {request.status === "pending" ? "Cancel request" : "Delete"}
+              </button>
             </article>
           ))}
         </div>
@@ -472,7 +553,7 @@ function ResidentRequestPanel({ onSubmit, submitting }) {
   return (
     <div className="panel request-panel">
       <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
-      <p className="panel-description">Tell your community team about a missed pickup or a special collection request.</p>
+      <p className="panel-description">Tell your community team about a missed pickup or a special collection request. If approved, an estimated collection date and time will appear in your calendar and mailbox.</p>
       <form className="form-grid" onSubmit={onSubmit}>
         <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
         <label>Details<textarea name="description" required maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
@@ -490,6 +571,10 @@ function Dashboard({ user, token, onLogout }) {
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyMonth, setHistoryMonth] = useState(() => manilaDateKey(new Date()).slice(0, 7));
+  const [historySchedules, setHistorySchedules] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
   const [residentPage, setResidentPage] = useState("resident-calendar");
   const [adminPage, setAdminPage] = useState(() => {
@@ -537,6 +622,31 @@ function Dashboard({ user, token, onLogout }) {
     load();
     return () => { active = false; };
   }, [admin, superadmin, token]);
+
+  useEffect(() => {
+    if (!historyOpen || (!admin && !superadmin)) return undefined;
+    let active = true;
+    async function loadCollectionHistory() {
+      setHistoryLoading(true);
+      setHistorySchedules([]);
+      try {
+        const result = await api(`/schedules?month=${encodeURIComponent(historyMonth)}`, {}, token);
+        const scopedSchedules = superadmin
+          ? result.schedules
+          : result.schedules.filter((schedule) => {
+            const scheduleResidencyId = schedule.residencyId?._id || schedule.residencyId;
+            return String(scheduleResidencyId) === String(user.residencyId);
+          });
+        if (active) setHistorySchedules(scopedSchedules);
+      } catch (error) {
+        if (active) setNotice({ message: error.message, isError: true });
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    }
+    loadCollectionHistory();
+    return () => { active = false; };
+  }, [admin, historyMonth, historyOpen, superadmin, token, user.residencyId]);
 
   async function submitSchedule(event) {
     event.preventDefault();
@@ -692,13 +802,17 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
-  async function deleteServiceRequest(id, label) {
-    if (!window.confirm(`Delete this ${label.toLowerCase()} service request? This cannot be undone.`)) return;
+  async function deleteServiceRequest(id, label, status) {
+    const isPending = status === "pending";
+    const confirmation = isPending
+      ? `Cancel your pending ${label.toLowerCase()} request? This cannot be undone.`
+      : `Delete this ${label.toLowerCase()} service request? This cannot be undone.`;
+    if (!window.confirm(confirmation)) return;
     setNotice(null);
     try {
       await api(`/requests/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
       await refreshDashboard();
-      setNotice({ message: "Service request deleted." });
+      setNotice({ message: isPending ? "Request canceled." : "Service request deleted." });
     } catch (error) {
       setNotice({ message: error.message, isError: true });
     }
@@ -778,7 +892,13 @@ function Dashboard({ user, token, onLogout }) {
           {superadminView === "collections" && (
             <section className="superadmin-content superadmin-operations">
               <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
+                <div className="panel-heading">
+                  <div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div>
+                  <div className="schedule-heading-actions">
+                    <button className="button button-outline" type="button" onClick={() => setHistoryOpen(true)}>Month history</button>
+                    <span className="count-badge">{schedules.length}</span>
+                  </div>
+                </div>
                 <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
                 {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
               </div>
@@ -814,7 +934,13 @@ function Dashboard({ user, token, onLogout }) {
           )}
           {adminPage === "admin-schedules" && (
             <section className="panel admin-operations schedule-panel">
-              <div className="panel-heading"><div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div><span className="count-badge">{schedules.length}</span></div>
+              <div className="panel-heading">
+                <div><div className="eyebrow">COLLECTION CALENDAR</div><h2>Manage collections</h2></div>
+                <div className="schedule-heading-actions">
+                  <button className="button button-outline" type="button" onClick={() => setHistoryOpen(true)}>Month history</button>
+                  <span className="count-badge">{schedules.length}</span>
+                </div>
+              </div>
               <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
               <div className="schedule-list">
                 {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
@@ -845,9 +971,18 @@ function Dashboard({ user, token, onLogout }) {
               <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
             </section>
           )}
-          {residentPage === "resident-mailbox" && <RequestMailbox requests={requests} />}
+          {residentPage === "resident-mailbox" && <RequestMailbox requests={requests} onDelete={deleteServiceRequest} />}
         </>
       )}
+      <CollectionHistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        month={historyMonth}
+        onMonthChange={setHistoryMonth}
+        schedules={historySchedules}
+        loading={historyLoading}
+        scopeLabel={superadmin ? "All residencies" : `${user.residencyName || "Your assigned residency"} only`}
+      />
       <Footer />
     </main>
   );
