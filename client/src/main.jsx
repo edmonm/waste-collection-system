@@ -998,10 +998,15 @@ function Dashboard({ user, token, onLogout }) {
             </section>
           )}
           {superadminView === "accounts" && (
-            <section className="superadmin-content panel">
-              <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Manage accounts</h2></div><span className="count-badge">{users.length}</span></div>
-              <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} subdivisions={subdivisions} />
-              {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <ManagedAccountRow key={account._id} account={account} residencies={residencies} subdivisions={subdivisions} onSave={updateAccount} />)}</div> : <div className="empty-state"><p>No accounts yet. Create an admin or resident account above.</p></div>}
+            <section className="superadmin-content accounts-management-grid">
+              <div className="panel accounts-create-panel">
+                <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Create account</h2></div></div>
+                <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} subdivisions={subdivisions} />
+              </div>
+              <div className="panel accounts-list-panel">
+                <div className="panel-heading"><div><div className="eyebrow">ACCOUNT DIRECTORY</div><h2>Existing accounts</h2></div><span className="count-badge">{users.length}</span></div>
+                {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <ManagedAccountRow key={account._id} account={account} residencies={residencies} subdivisions={subdivisions} onSave={updateAccount} />)}</div> : <div className="empty-state"><p>No accounts yet. Create an account to get started.</p></div>}
+              </div>
             </section>
           )}
           {superadminView === "collections" && (
