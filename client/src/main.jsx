@@ -377,29 +377,40 @@ function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName
   );
 }
 
-function AccountForm({ onSubmit, admin, residencies = [], subdivisions = [], residencyName = "", subdivisionName = "" }) {
+function AccountForm({ onSubmit, admin, canCreateSuperadmin = false, residencies = [], subdivisions = [], residencyName = "", subdivisionName = "" }) {
   const [selectedResidencyId, setSelectedResidencyId] = useState("");
   const [selectedSubdivisionId, setSelectedSubdivisionId] = useState("");
+  const [selectedRole, setSelectedRole] = useState(admin ? "user" : "admin");
   const availableSubdivisions = subdivisions.filter((subdivision) => {
     const assignedResidencyId = subdivision.residencyId?._id || subdivision.residencyId;
     return String(assignedResidencyId) === String(selectedResidencyId);
   });
 
   return (
-    <form className="form-grid management-form" onSubmit={onSubmit}>
+    <form className="form-grid management-form" onSubmit={onSubmit} onReset={() => {
+      setSelectedResidencyId("");
+      setSelectedSubdivisionId("");
+      setSelectedRole(admin ? "user" : "admin");
+    }}>
       {admin && <input type="hidden" name="role" value="user" />}
       {admin && <div className="schedule-residency-context"><span>Residency · Subdivision</span><strong>{residencyName || "Your assigned residency"} · {subdivisionName || "Your assigned subdivision"}</strong></div>}
       <label>Full name<input name="name" required minLength="2" maxLength="80" /></label>
       <label>Email address<input name="email" type="email" required maxLength="254" /></label>
       <label>Phone number<input name="phone" type="tel" required placeholder="+639171234567" /><small>Use Philippine mobile format beginning with +639.</small></label>
-      {!admin && <label>Account type<select name="role"><option value="admin">Residency admin</option><option value="user">Resident</option></select></label>}
-      {!admin && (
+      {!admin && <label>Account type<select name="role" value={selectedRole} onChange={(event) => {
+        setSelectedRole(event.target.value);
+        if (event.target.value === "superadmin") {
+          setSelectedResidencyId("");
+          setSelectedSubdivisionId("");
+        }
+      }}><option value="admin">Residency admin</option><option value="user">Resident</option>{canCreateSuperadmin && <option value="superadmin">Superadmin</option>}</select></label>}
+      {!admin && selectedRole !== "superadmin" && (
         <>
           <label>Residency<select name="residencyId" required value={selectedResidencyId} onChange={(event) => { setSelectedResidencyId(event.target.value); setSelectedSubdivisionId(""); }}><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>
           <label>Subdivision<select name="subdivisionId" required value={selectedSubdivisionId} onChange={(event) => setSelectedSubdivisionId(event.target.value)}><option value="" disabled>Select subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}</select></label>
         </>
       )}
-      <button className="button button-dark" type="submit">Create {admin ? "resident" : "account"} ↗</button>
+      <button className="button button-dark" type="submit">{admin ? "Create resident" : selectedRole === "superadmin" ? "Create superadmin" : "Create account"} ↗</button>
       <p className="form-footnote management-password-note">Temporary password: <strong>11111111</strong>. They must create a new password before accessing the dashboard.</p>
     </form>
   );
@@ -428,7 +439,7 @@ function ManagedAccountRow({ account, residencies, subdivisions, onSave }) {
   return (
     <article className="resident-row managed-account-row">
       <div className="managed-account-identity"><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div>
-      <div className="resident-admin-actions">
+      {account.role === "superadmin" ? <span className="status-pill">superadmin</span> : <div className="resident-admin-actions">
         <select aria-label={`Role for ${account.name}`} value={role} onChange={(event) => setRole(event.target.value)}>
           <option value="admin">Admin</option><option value="user">Resident</option>
         </select>
@@ -439,7 +450,7 @@ function ManagedAccountRow({ account, residencies, subdivisions, onSave }) {
           <option value="" disabled>Assign subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}
         </select>
         <button className="button button-small button-dark" type="button" disabled={!selectedSubdivisionIsValid} onClick={() => onSave(account._id, residencyId, subdivisionId, role)}>Save</button>
-      </div>
+      </div>}
     </article>
   );
 }
@@ -1001,7 +1012,7 @@ function Dashboard({ user, token, onLogout }) {
             <section className="superadmin-content accounts-management-grid">
               <div className="panel accounts-create-panel">
                 <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Create account</h2></div></div>
-                <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} subdivisions={subdivisions} />
+                <AccountForm onSubmit={createAccount} admin={false} canCreateSuperadmin residencies={residencies} subdivisions={subdivisions} />
               </div>
               <div className="panel accounts-list-panel">
                 <div className="panel-heading"><div><div className="eyebrow">ACCOUNT DIRECTORY</div><h2>Existing accounts</h2></div><span className="count-badge">{users.length}</span></div>

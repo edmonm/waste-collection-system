@@ -15,7 +15,7 @@ const createUserSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(254),
   phone: phoneSchema,
-  role: z.enum(["admin", "user"]),
+  role: z.enum(["admin", "user", "superadmin"]),
   residencyId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   subdivisionId: z.string().regex(/^[a-f\d]{24}$/i).optional()
 });
@@ -33,7 +33,7 @@ router.get("/", async (request, response, next) => {
       return response.status(403).json({ error: "Your account needs a subdivision assignment to manage residents." });
     }
     const filter = request.user.role === "superadmin"
-      ? { role: { $ne: "superadmin" } }
+      ? { _id: { $ne: request.user._id } }
       : { residencyId: request.user.residencyId, subdivisionId: request.user.subdivisionId, role: { $in: ["user", "resident"] } };
     const users = await User.find(filter)
       .select("name email phone role residencyId subdivisionId createdAt")
@@ -51,6 +51,33 @@ router.post("/", async (request, response, next) => {
   try {
     const input = createUserSchema.parse(request.body);
     const role = request.user.role === "admin" ? "user" : input.role;
+    if (role === "superadmin" && request.user.role !== "superadmin") {
+      return response.status(403).json({ error: "Only a superadmin can create another superadmin account." });
+    }
+    if (role === "superadmin") {
+      const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+      const user = await User.create({
+        name: input.name,
+        email: input.email.toLowerCase(),
+        phone: input.phone,
+        passwordHash,
+        role,
+        mustChangePassword: true
+      });
+      return response.status(201).json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          residencyId: null,
+          residencyName: null,
+          subdivisionId: null,
+          subdivisionName: null
+        }
+      });
+    }
     const residencyId = request.user.role === "admin" ? request.user.residencyId : input.residencyId;
     if (!residencyId) return response.status(400).json({ error: "Select a residency for this account." });
     const subdivisionId = request.user.role === "admin" ? request.user.subdivisionId : input.subdivisionId;

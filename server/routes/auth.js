@@ -89,7 +89,7 @@ router.post("/change-password", async (request, response, next) => {
 
     const { newPassword } = changePasswordSchema.parse(request.body);
     const user = await User.findOneAndUpdate(
-      { _id: payload.sub, mustChangePassword: true, role: { $in: ["admin", "user"] } },
+      { _id: payload.sub, mustChangePassword: true, role: { $in: ["superadmin", "admin", "user"] } },
       { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
       { new: true, runValidators: true }
     );
