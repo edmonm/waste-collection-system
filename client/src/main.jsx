@@ -5,6 +5,7 @@ import "./style.css";
 const tokenKey = "greenloop-token";
 const adminPageLinks = [
   ["admin-overview", "Overview"],
+  ["admin-calendar", "Calendar"],
   ["admin-schedules", "Collections"],
   ["admin-requests", "Request"],
   ["admin-residents", "Residents"]
@@ -366,7 +367,7 @@ function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName
       {admin
         ? <div className="schedule-residency-context"><span>Residency</span><strong>{residencyName || "Your assigned residency"}</strong></div>
         : <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
-      <label>Collection area<input name="area" required maxLength="100" placeholder="e.g. North District" /></label>
+      <label>Subdivision / collection area<input name="area" required maxLength="100" placeholder="e.g. Row House" /></label>
       <label>Collection date<input name="date" type="date" required /></label>
       <label>Estimated arrival time<input name="estimatedArrivalTime" type="time" required /></label>
       <label>Waste type<select name="wasteType" required><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
@@ -376,17 +377,80 @@ function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName
   );
 }
 
-function AccountForm({ onSubmit, admin, residencies }) {
+function AccountForm({ onSubmit, admin, residencies = [], subdivisions = [], residencyName = "", subdivisionName = "" }) {
+  const [selectedResidencyId, setSelectedResidencyId] = useState("");
+  const [selectedSubdivisionId, setSelectedSubdivisionId] = useState("");
+  const availableSubdivisions = subdivisions.filter((subdivision) => {
+    const assignedResidencyId = subdivision.residencyId?._id || subdivision.residencyId;
+    return String(assignedResidencyId) === String(selectedResidencyId);
+  });
+
   return (
     <form className="form-grid management-form" onSubmit={onSubmit}>
       {admin && <input type="hidden" name="role" value="user" />}
+      {admin && <div className="schedule-residency-context"><span>Residency · Subdivision</span><strong>{residencyName || "Your assigned residency"} · {subdivisionName || "Your assigned subdivision"}</strong></div>}
       <label>Full name<input name="name" required minLength="2" maxLength="80" /></label>
       <label>Email address<input name="email" type="email" required maxLength="254" /></label>
       <label>Phone number<input name="phone" type="tel" required placeholder="+639171234567" /><small>Use Philippine mobile format beginning with +639.</small></label>
       {!admin && <label>Account type<select name="role"><option value="admin">Residency admin</option><option value="user">Resident</option></select></label>}
-      {!admin && <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
+      {!admin && (
+        <>
+          <label>Residency<select name="residencyId" required value={selectedResidencyId} onChange={(event) => { setSelectedResidencyId(event.target.value); setSelectedSubdivisionId(""); }}><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>
+          <label>Subdivision<select name="subdivisionId" required value={selectedSubdivisionId} onChange={(event) => setSelectedSubdivisionId(event.target.value)}><option value="" disabled>Select subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}</select></label>
+        </>
+      )}
       <button className="button button-dark" type="submit">Create {admin ? "resident" : "account"} ↗</button>
       <p className="form-footnote management-password-note">Temporary password: <strong>11111111</strong>. They must create a new password before accessing the dashboard.</p>
+    </form>
+  );
+}
+
+function ManagedAccountRow({ account, residencies, subdivisions, onSave }) {
+  const [residencyId, setResidencyId] = useState(account.residencyId?._id || account.residencyId || "");
+  const [subdivisionId, setSubdivisionId] = useState(account.subdivisionId?._id || account.subdivisionId || "");
+  const [role, setRole] = useState(account.role === "resident" ? "user" : account.role);
+  const availableSubdivisions = subdivisions.filter((subdivision) =>
+    String(subdivision.residencyId?._id || subdivision.residencyId) === String(residencyId)
+  );
+  const selectedSubdivisionIsValid = availableSubdivisions.some((subdivision) => subdivision._id === subdivisionId);
+
+  useEffect(() => {
+    setResidencyId(account.residencyId?._id || account.residencyId || "");
+    setSubdivisionId(account.subdivisionId?._id || account.subdivisionId || "");
+    setRole(account.role === "resident" ? "user" : account.role);
+  }, [account]);
+
+  function changeResidency(event) {
+    setResidencyId(event.target.value);
+    setSubdivisionId("");
+  }
+
+  return (
+    <article className="resident-row managed-account-row">
+      <div className="managed-account-identity"><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div>
+      <div className="resident-admin-actions">
+        <select aria-label={`Role for ${account.name}`} value={role} onChange={(event) => setRole(event.target.value)}>
+          <option value="admin">Admin</option><option value="user">Resident</option>
+        </select>
+        <select aria-label={`Residency for ${account.name}`} value={residencyId} onChange={changeResidency}>
+          <option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}
+        </select>
+        <select aria-label={`Subdivision for ${account.name}`} value={subdivisionId} onChange={(event) => setSubdivisionId(event.target.value)}>
+          <option value="" disabled>Assign subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}
+        </select>
+        <button className="button button-small button-dark" type="button" disabled={!selectedSubdivisionIsValid} onClick={() => onSave(account._id, residencyId, subdivisionId, role)}>Save</button>
+      </div>
+    </article>
+  );
+}
+
+function SubdivisionForm({ residencies, subdivisions, onSubmit, submitting }) {
+  return (
+    <form className="inline-form subdivision-form" onSubmit={onSubmit}>
+      <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.filter((residency) => residency.active).map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>
+      <label>Subdivision name<input name="name" required minLength="2" maxLength="100" placeholder="e.g. Row House" /></label>
+      <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Adding..." : "Add subdivision"}</button>
+      <p className="form-footnote">{subdivisions.length} subdivision(s) configured</p>
     </form>
   );
 }
@@ -549,11 +613,11 @@ function RequestMailbox({ requests, onDelete }) {
   );
 }
 
-function ResidentRequestPanel({ onSubmit, submitting }) {
+function ResidentRequestPanel({ onSubmit, submitting, subdivisionName }) {
   return (
     <div className="panel request-panel">
       <div className="panel-heading"><div><div className="eyebrow">NEED A HAND?</div><h2>Let us know</h2></div><span className="feature-icon">♡</span></div>
-      <p className="panel-description">Tell your community team about a missed pickup or a special collection request. If approved, an estimated collection date and time will appear in your calendar and mailbox.</p>
+      <p className="panel-description">Submit a missed pickup or special collection request for {subdivisionName || "your subdivision"}. Your subdivision admin will review it. If approved, the estimated collection date and time will appear in your calendar and mailbox.</p>
       <form className="form-grid" onSubmit={onSubmit}>
         <label>Request type<select name="kind"><option value="special_request">Special collection request</option><option value="missed_pickup">Report a missed pickup</option></select></label>
         <label>Details<textarea name="description" required maxLength="1000" rows="4" placeholder="Share the details so we can help..."></textarea></label>
@@ -568,6 +632,7 @@ function Dashboard({ user, token, onLogout }) {
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
   const [residencies, setResidencies] = useState([]);
+  const [subdivisions, setSubdivisions] = useState([]);
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -585,33 +650,37 @@ function Dashboard({ user, token, onLogout }) {
   const superadmin = user.role === "superadmin";
 
   async function refreshDashboard() {
-    const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
+    const [scheduleResult, requestResult, userResult, residencyResult, subdivisionResult] = await Promise.all([
       api("/schedules", {}, token),
       admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
       admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
-      superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
+      superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] }),
+      admin || superadmin ? api("/subdivisions", {}, token) : Promise.resolve({ subdivisions: [] })
     ]);
     setSchedules(scheduleResult.schedules);
     setRequests(requestResult.requests);
     setUsers(userResult.users);
     setResidencies(residencyResult.residencies);
+    setSubdivisions(subdivisionResult.subdivisions);
   }
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const [scheduleResult, requestResult, userResult, residencyResult] = await Promise.all([
+        const [scheduleResult, requestResult, userResult, residencyResult, subdivisionResult] = await Promise.all([
           api("/schedules", {}, token),
           admin || superadmin || user.role === "user" ? api("/requests", {}, token) : Promise.resolve({ requests: [] }),
           admin || superadmin ? api("/users", {}, token) : Promise.resolve({ users: [] }),
-          superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] })
+          superadmin ? api("/residencies", {}, token) : Promise.resolve({ residencies: [] }),
+          admin || superadmin ? api("/subdivisions", {}, token) : Promise.resolve({ subdivisions: [] })
         ]);
         if (active) {
           setSchedules(scheduleResult.schedules);
           setRequests(requestResult.requests);
           setUsers(userResult.users);
           setResidencies(residencyResult.residencies);
+          setSubdivisions(subdivisionResult.subdivisions);
         }
       } catch (error) {
         if (active) setNotice({ message: error.message, isError: true });
@@ -724,14 +793,46 @@ function Dashboard({ user, token, onLogout }) {
     }
   }
 
-  async function updateAccount(id, residencyId, role) {
+  async function createSubdivision(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setNotice(null);
+    const form = event.currentTarget;
+    try {
+      await api("/subdivisions", {
+        method: "POST",
+        body: JSON.stringify(Object.fromEntries(new FormData(form)))
+      }, token);
+      await refreshDashboard();
+      setNotice({ message: "Subdivision added." });
+      form.reset();
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function updateAccount(id, residencyId, subdivisionId, role) {
     try {
       await api(`/users/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ residencyId, role })
+        body: JSON.stringify({ residencyId, subdivisionId, role })
       }, token);
       await refreshDashboard();
-      setNotice({ message: "Account updated. If the role changed, the account holder must use the temporary password and set a new one." });
+      setNotice({ message: "Account updated." });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
+  async function deleteResidentAccount(account) {
+    if (!window.confirm(`Delete resident account for ${account.name}? Their service request history will also be deleted. This cannot be undone.`)) return;
+    setNotice(null);
+    try {
+      await api(`/users/${encodeURIComponent(account._id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setNotice({ message: `Resident account for ${account.name} deleted.` });
     } catch (error) {
       setNotice({ message: error.message, isError: true });
     }
@@ -825,7 +926,7 @@ function Dashboard({ user, token, onLogout }) {
   return (
     <main className="dashboard-shell">
       <nav className="topbar"><Brand /><div className="user-nav"><span className="role-chip">{superadmin ? "SUPERADMIN" : admin ? "ADMIN" : "RESIDENT"}</span><span className="user-name">{user.name}</span><button className="button button-outline" type="button" onClick={onLogout}>Sign out</button></div></nav>
-      <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrator accounts, and system-wide operations." : admin ? "Manage residents and collection services for your residency." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
+      <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}${user.subdivisionName ? ` · ${user.subdivisionName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}${user.subdivisionName ? ` · ${user.subdivisionName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrators, subdivisions, and system-wide operations." : admin ? "Manage residents and requests for your subdivision; collection notices are shared residency-wide." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
       {!superadmin && (
         <nav className={`dashboard-tabs${admin ? "" : " resident-dashboard-tabs"}`} aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}>
@@ -848,7 +949,7 @@ function Dashboard({ user, token, onLogout }) {
       {superadmin ? (
         <>
           <nav className="dashboard-tabs" aria-label="Superadmin sections">
-            {[["overview", "Overview"], ["residencies", "Residencies"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
+            {[["overview", "Overview"], ["residencies", "Residencies"], ["subdivisions", "Subdivisions"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
               <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}{view === "requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}</button>
             ))}
           </nav>
@@ -882,11 +983,25 @@ function Dashboard({ user, token, onLogout }) {
               {loading ? <div className="empty-state"><p>Loading residencies...</p></div> : residencies.length ? <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><div><strong>{residency.name}</strong><small>{residency.active ? "Active" : "Inactive"}</small></div><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div> : <div className="empty-state"><p>No residencies yet. Create one to get started.</p></div>}
             </section>
           )}
+          {superadminView === "subdivisions" && (
+            <section className="superadmin-content panel">
+              <div className="panel-heading"><div><div className="eyebrow">RESIDENCY ORGANIZATION</div><h2>Manage subdivisions</h2></div><span className="count-badge">{subdivisions.length}</span></div>
+              <SubdivisionForm residencies={residencies} subdivisions={subdivisions} onSubmit={createSubdivision} submitting={submitting} />
+              {subdivisions.length ? (
+                <div className="resident-list">{subdivisions.map((subdivision) => (
+                  <article key={subdivision._id} className="resident-row">
+                    <div><strong>{subdivision.name}</strong><small>{subdivision.residencyId?.name || "Residency unavailable"}</small></div>
+                    <span className="status-pill">subdivision</span>
+                  </article>
+                ))}</div>
+              ) : <div className="empty-state"><p>No subdivisions yet. Add a subdivision for each residency.</p></div>}
+            </section>
+          )}
           {superadminView === "accounts" && (
             <section className="superadmin-content panel">
               <div className="panel-heading"><div><div className="eyebrow">ACCESS MANAGEMENT</div><h2>Manage accounts</h2></div><span className="count-badge">{users.length}</span></div>
-              <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} />
-              {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><select aria-label={`Role for ${account.name}`} value={account.role === "resident" ? "user" : account.role} onChange={(event) => updateAccount(account._id, account.residencyId?._id || account.residencyId, event.target.value)}><option value="admin">Admin</option><option value="user">Resident</option></select><select aria-label={`Residency for ${account.name}`} value={account.residencyId?._id || account.residencyId || ""} onChange={(event) => updateAccount(account._id, event.target.value, account.role === "resident" ? "user" : account.role)}><option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></div></article>)}</div> : <div className="empty-state"><p>No accounts yet. Create an admin or resident account above.</p></div>}
+              <AccountForm onSubmit={createAccount} admin={false} residencies={residencies} subdivisions={subdivisions} />
+              {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <ManagedAccountRow key={account._id} account={account} residencies={residencies} subdivisions={subdivisions} onSave={updateAccount} />)}</div> : <div className="empty-state"><p>No accounts yet. Create an admin or resident account above.</p></div>}
             </section>
           )}
           {superadminView === "collections" && (
@@ -932,6 +1047,9 @@ function Dashboard({ user, token, onLogout }) {
               </div>
             </section>
           )}
+          {adminPage === "admin-calendar" && (
+            <ResidentCalendar schedules={schedules} requests={requests} />
+          )}
           {adminPage === "admin-schedules" && (
             <section className="panel admin-operations schedule-panel">
               <div className="panel-heading">
@@ -956,9 +1074,9 @@ function Dashboard({ user, token, onLogout }) {
           {adminPage === "admin-residents" && (
             <section className="management-grid admin-residents-section">
               <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents</h2></div><span className="count-badge">{users.length}</span></div>
-                <AccountForm onSubmit={createAccount} admin residencies={residencies} />
-                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><span className="status-pill">resident</span></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account above.</p></div>}
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents{user.subdivisionName ? ` · ${user.subdivisionName}` : ""}</h2></div><span className="count-badge">{users.length}</span></div>
+                <AccountForm onSubmit={createAccount} admin residencies={residencies} subdivisions={subdivisions} residencyName={user.residencyName} subdivisionName={user.subdivisionName} />
+                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><span className="status-pill">resident</span><button className="button button-small button-delete" type="button" onClick={() => deleteResidentAccount(account)}>Delete</button></div></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account above.</p></div>}
               </div>
             </section>
           )}
@@ -968,7 +1086,7 @@ function Dashboard({ user, token, onLogout }) {
           {residentPage === "resident-calendar" && <ResidentCalendar schedules={schedules} requests={requests} />}
           {residentPage === "resident-requests" && (
             <section className="resident-request-page">
-              <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} />
+              <ResidentRequestPanel onSubmit={submitRequest} submitting={submitting} subdivisionName={user.subdivisionName} />
             </section>
           )}
           {residentPage === "resident-mailbox" && <RequestMailbox requests={requests} onDelete={deleteServiceRequest} />}

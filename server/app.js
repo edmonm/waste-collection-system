@@ -8,6 +8,7 @@ import scheduleRoutes from "./routes/schedules.js";
 import requestRoutes from "./routes/requests.js";
 import residencyRoutes from "./routes/residencies.js";
 import userRoutes from "./routes/users.js";
+import subdivisionRoutes from "./routes/subdivisions.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -36,6 +37,7 @@ app.use("/api/schedules", scheduleRoutes);
 app.use("/api/requests", requestRoutes);
 app.use("/api/residencies", residencyRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/subdivisions", subdivisionRoutes);
 
 
 app.use(express.static(path.join(__dirname, "../dist")));

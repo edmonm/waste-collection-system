@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { z } from "zod";
 import { authenticate, requireAnyRole, requireRole } from "../middleware/auth.js";
 import { ServiceRequest } from "../models/ServiceRequest.js";
+import { User } from "../models/User.js";
 import { sendSms } from "../services/sms.js";
 import { formatDateKey, formatTime24Hour, manilaDateTime } from "../utils/dateTime.js";
 
@@ -20,15 +21,35 @@ const updateSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("declined"), declineReason: z.string().trim().min(1).max(500) })
 ]);
 
+async function adminSubdivisionFilter(user) {
+  if (!user.subdivisionId) return null;
+  const residentIds = await User.find({
+    residencyId: user.residencyId,
+    subdivisionId: user.subdivisionId,
+    role: { $in: ["user", "resident"] }
+  }).distinct("_id");
+  return {
+    residencyId: user.residencyId,
+    $or: [
+      { subdivisionId: user.subdivisionId },
+      { subdivisionId: null, resident: { $in: residentIds } }
+    ]
+  };
+}
+
 router.use(authenticate);
 
 router.post("/", requireRole("user"), async (request, response, next) => {
   try {
+    if (!request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment before submitting requests." });
+    }
     const input = createSchema.parse(request.body);
     const serviceRequest = await ServiceRequest.create({
       ...input,
       resident: request.user.id,
-      residencyId: request.user.residencyId
+      residencyId: request.user.residencyId,
+      subdivisionId: request.user.subdivisionId
     });
     return response.status(201).json({ request: serviceRequest });
   } catch (error) {
@@ -41,8 +62,11 @@ router.get("/", requireAnyRole("admin", "superadmin", "user"), async (request, r
     const filter = request.user.role === "superadmin"
       ? {}
       : request.user.role === "admin"
-        ? { residencyId: request.user.residencyId }
+        ? await adminSubdivisionFilter(request.user)
         : { resident: request.user.id, residencyId: request.user.residencyId };
+    if (request.user.role === "admin" && !filter) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const requests = await ServiceRequest.find(filter)
       .populate("resident", "name phone email")
       .sort({ createdAt: -1 })
@@ -62,7 +86,14 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
     }
     const filter = request.user.role === "superadmin"
       ? { _id: request.params.id }
-      : { _id: request.params.id, residencyId: request.user.residencyId };
+      : {
+        ...await adminSubdivisionFilter(request.user),
+        _id: request.params.id,
+        residencyId: request.user.residencyId
+      };
+    if (request.user.role === "admin" && !request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const serviceRequest = await ServiceRequest.findOneAndUpdate(
       { ...filter, status: "pending" },
       decision.status === "approved"
@@ -75,6 +106,7 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
           scheduledSmsClaimedAt: null,
           scheduledSmsNextAttemptAt: null,
           scheduledSmsSentAt: null,
+          subdivisionId: request.user.role === "admin" ? request.user.subdivisionId : undefined,
           declineReason: ""
         }
         : {
@@ -86,6 +118,7 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
           scheduledSmsClaimedAt: null,
           scheduledSmsNextAttemptAt: null,
           scheduledSmsSentAt: null,
+          subdivisionId: request.user.role === "admin" ? request.user.subdivisionId : undefined,
           declineReason: decision.declineReason
         },
       { new: true, runValidators: true }
@@ -118,8 +151,11 @@ router.delete("/:id", requireAnyRole("admin", "superadmin", "user"), async (requ
     const filter = request.user.role === "superadmin"
       ? { _id: request.params.id }
       : request.user.role === "admin"
-        ? { _id: request.params.id, residencyId: request.user.residencyId }
+        ? { ...await adminSubdivisionFilter(request.user), _id: request.params.id, residencyId: request.user.residencyId }
         : { _id: request.params.id, resident: request.user.id, residencyId: request.user.residencyId };
+    if (request.user.role === "admin" && !request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const serviceRequest = await ServiceRequest.findOneAndDelete(filter);
     if (!serviceRequest) return response.status(404).json({ error: "Service request not found." });
     return response.json({ message: "Service request deleted." });

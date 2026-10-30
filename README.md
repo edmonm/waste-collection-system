@@ -101,19 +101,23 @@ After the app is running:
 
 1. On the sign-in page, choose **Login** and sign in with the superadmin email and password from `.env`.
 2. In the superadmin dashboard, create a **residency**.
-3. Create an **Admin** account and assign it to that residency. The admin can manage residents, schedules, and service requests only for its assigned residency.
-4. Admins can create user accounts and assign them to their residency. Each user sees schedules for their own residency and receives schedule SMS notifications when TextBee is configured.
-5. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
+3. Open **Subdivisions** and create subdivisions under the residency, such as Row House.
+4. Create an **Admin** account and assign both the residency and subdivision. The admin can manage residents and service requests only in that subdivision.
+5. Admins can create resident accounts; each resident is automatically assigned to the creating admin's subdivision. Superadmins can assign admins and residents to subdivisions from **Accounts**.
+6. Collection schedules and SMS notices are shared with all residents in a residency. Service requests are submitted by residents and reviewed by admins within their assigned subdivision.
+7. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
 
 | Account type | Can do |
 | --- | --- |
-| **Superadmin** | System owner with access across all residencies, accounts, schedules, and service requests. |
-| **Admin** | Manage residents, schedules, and service requests in the admin's assigned residency. |
-| **User (resident)** | View their own residency's collection schedules, receive schedule notifications when SMS is enabled, and submit service requests. |
+| **Superadmin** | System owner with access across residencies, subdivisions, accounts, schedules, and service requests. |
+| **Admin** | Manage residents and requests in the admin's assigned subdivision; publish schedules visible throughout the assigned residency. |
+| **User (resident)** | View schedules and receive notifications for their residency; submit service requests within their assigned subdivision. |
 
-Only admins and superadmins can create accounts. Admins can create users for their assigned residency; superadmins can create admins or users.
+Only admins and superadmins can create accounts. Admin-created residents inherit the admin's residency and subdivision. Superadmins create subdivisions and can assign either role to a residency and subdivision.
+
+Existing accounts must be assigned a subdivision by a superadmin under **Accounts** before admins can manage their subdivision's residents and requests. If using `npm run seed:admin`, set both `ADMIN_RESIDENCY_ID` and `ADMIN_SUBDIVISION_ID` in `.env`; create the subdivision in the dashboard first.
 
 Accounts created by an admin or superadmin receive the temporary password `11111111`. On first login, the account holder must choose a new password before the dashboard or any protected features are available.
 
@@ -200,8 +204,10 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | GET | `/api/auth/me` | Signed in | Get the current account. |
 | GET/POST | `/api/residencies` | Superadmin | List or create residencies. |
 | PATCH | `/api/residencies/:id` | Superadmin | Activate or deactivate a residency. |
+| GET | `/api/subdivisions` | Admin or superadmin | List subdivisions within the permitted residency scope. |
+| POST | `/api/subdivisions` | Superadmin | Create a subdivision in a residency. |
 | GET/POST | `/api/users` | Admin or superadmin | List or create accounts within the permitted scope. |
-| PATCH | `/api/users/:id` | Superadmin | Change an account's role or residency. |
+| PATCH | `/api/users/:id` | Superadmin | Assign an account's role, residency, and subdivision. |
 | GET | `/api/schedules` | Signed in | List schedules visible to the account. |
 | POST | `/api/schedules` | Admin or superadmin | Publish a schedule and notify that residency's residents. |
 | POST | `/api/requests` | Resident | Submit a service request. |

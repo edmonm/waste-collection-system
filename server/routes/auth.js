@@ -34,7 +34,9 @@ function publicUser(user) {
     phone: user.phone,
     role: user.role === "resident" ? "user" : user.role,
     residencyId: user.residencyId?._id?.toString() || user.residencyId?.toString() || null,
-    residencyName: user.residencyId?.name || null
+    residencyName: user.residencyId?.name || null,
+    subdivisionId: user.subdivisionId?._id?.toString() || user.subdivisionId?.toString() || null,
+    subdivisionName: user.subdivisionId?.name || null
   };
 }
 
@@ -54,7 +56,7 @@ router.post("/login", async (request, response, next) => {
       const residency = await Residency.findOne({ _id: user.residencyId, active: true });
       if (!residency) return response.status(403).json({ error: "This account's residency is inactive. Contact a superadmin." });
     }
-    await user.populate("residencyId", "name");
+    await user.populate(["residencyId", "subdivisionId"]);
     if (user.mustChangePassword) {
       return response.json({
         passwordChangeRequired: true,
@@ -92,7 +94,7 @@ router.post("/change-password", async (request, response, next) => {
       { new: true, runValidators: true }
     );
     if (!user) return response.status(403).json({ error: "This account no longer requires a password change. Sign in again." });
-    await user.populate("residencyId", "name");
+    await user.populate(["residencyId", "subdivisionId"]);
     return response.json({ token: issueToken(user), user: publicUser(user) });
   } catch (error) {
     return next(error);
@@ -101,7 +103,7 @@ router.post("/change-password", async (request, response, next) => {
 
 router.get("/me", authenticate, async (request, response, next) => {
   try {
-    await request.user.populate("residencyId", "name");
+    await request.user.populate(["residencyId", "subdivisionId"]);
     return response.json({ user: publicUser(request.user) });
   } catch (error) {
     return next(error);
