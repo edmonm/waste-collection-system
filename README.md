@@ -115,7 +115,7 @@ There are three account types:
 | **Admin** | Manage residents and requests in the admin's assigned subdivision; publish schedules visible throughout the assigned residency. |
 | **User (resident)** | View schedules and receive notifications for their residency; submit service requests within their assigned subdivision. |
 
-Only admins and superadmins can create accounts. Admins create residents in their own subdivision. Superadmins can create admins, residents, or additional superadmins; superadmin accounts are not assigned to a residency or subdivision.
+Only admins and superadmins can create accounts. Admins create residents in their own subdivision. Superadmins can create admins, residents, or additional superadmins; superadmin accounts are not assigned to a residency or subdivision. From **Accounts**, superadmins can edit account names, view creation dates, change or reset passwords, and lock or unlock accounts.
 
 Existing accounts must be assigned a subdivision by a superadmin under **Accounts** before admins can manage their subdivision's residents and requests. If using `npm run seed:admin`, set both `ADMIN_RESIDENCY_ID` and `ADMIN_SUBDIVISION_ID` in `.env`; create the subdivision in the dashboard first.
 

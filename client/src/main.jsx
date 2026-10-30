@@ -416,42 +416,161 @@ function AccountForm({ onSubmit, admin, canCreateSuperadmin = false, residencies
   );
 }
 
-function ManagedAccountRow({ account, residencies, subdivisions, onSave }) {
+function ManagedAccountRow({ account, onView, onSettings, currentUserId }) {
+  const normalizedRole = account.role === "resident" ? "user" : account.role;
+  const isCurrentUser = String(account._id) === String(currentUserId);
+  return (
+    <tr>
+      <td><strong>{account.name}</strong>{isCurrentUser && <span className="current-account-pill">You</span>}</td>
+      <td>{account.email}</td>
+      <td><span className="status-pill">{normalizedRole === "user" ? "Resident" : normalizedRole}</span>{account.accountLocked && <span className="status-pill status-declined account-locked-pill">Locked</span>}</td>
+      <td>{account.residencyId?.name || "—"}</td>
+      <td>{account.subdivisionId?.name || "—"}</td>
+      <td>
+        <div className="account-row-actions">
+          <button className="account-icon-button" type="button" aria-label={`View details for ${account.name}`} title="View details" onClick={() => onView(account)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.7" /></svg>
+          </button>
+          <button className="account-icon-button" type="button" aria-label={`Settings for ${account.name}`} title="Account settings" onClick={() => onSettings(account)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Z" /><path d="m19.4 13.5 1.1.9-1.6 2.8-1.4-.5a7.8 7.8 0 0 1-1.6.9l-.2 1.5h-3.3l-.2-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.5-1.6-2.8 1.1-.9a7.6 7.6 0 0 1 0-1.8l-1.1-.9 1.6-2.8 1.4.5a7.8 7.8 0 0 1 1.6-.9l.2-1.5h3.3l.2 1.5a7.8 7.8 0 0 1 1.6.9l1.4-.5 1.6 2.8-1.1.9a7.6 7.6 0 0 1 0 1.8Z" /></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function AccountDetailsDialog({ account, residencies, subdivisions, onSave, onClose }) {
+  const dialogRef = useRef(null);
   const [residencyId, setResidencyId] = useState(account.residencyId?._id || account.residencyId || "");
   const [subdivisionId, setSubdivisionId] = useState(account.subdivisionId?._id || account.subdivisionId || "");
   const [role, setRole] = useState(account.role === "resident" ? "user" : account.role);
+  const editable = account.role !== "superadmin";
   const availableSubdivisions = subdivisions.filter((subdivision) =>
     String(subdivision.residencyId?._id || subdivision.residencyId) === String(residencyId)
   );
   const selectedSubdivisionIsValid = availableSubdivisions.some((subdivision) => subdivision._id === subdivisionId);
 
   useEffect(() => {
-    setResidencyId(account.residencyId?._id || account.residencyId || "");
-    setSubdivisionId(account.subdivisionId?._id || account.subdivisionId || "");
-    setRole(account.role === "resident" ? "user" : account.role);
-  }, [account]);
+    dialogRef.current?.showModal();
+  }, []);
 
   function changeResidency(event) {
     setResidencyId(event.target.value);
     setSubdivisionId("");
   }
 
+  async function saveAccount() {
+    const saved = await onSave(account._id, residencyId, subdivisionId, role);
+    if (saved) dialogRef.current?.close();
+  }
+
   return (
-    <article className="resident-row managed-account-row">
-      <div className="managed-account-identity"><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div>
-      {account.role === "superadmin" ? <span className="status-pill">superadmin</span> : <div className="resident-admin-actions">
-        <select aria-label={`Role for ${account.name}`} value={role} onChange={(event) => setRole(event.target.value)}>
-          <option value="admin">Admin</option><option value="user">Resident</option>
-        </select>
-        <select aria-label={`Residency for ${account.name}`} value={residencyId} onChange={changeResidency}>
-          <option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}
-        </select>
-        <select aria-label={`Subdivision for ${account.name}`} value={subdivisionId} onChange={(event) => setSubdivisionId(event.target.value)}>
-          <option value="" disabled>Assign subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}
-        </select>
-        <button className="button button-small button-dark" type="button" disabled={!selectedSubdivisionIsValid} onClick={() => onSave(account._id, residencyId, subdivisionId, role)}>Save</button>
-      </div>}
-    </article>
+    <dialog className="account-details-dialog" ref={dialogRef} onClose={onClose}>
+      <div className="collection-history-heading">
+        <div><div className="eyebrow">ACCOUNT DETAILS</div><h2>{account.name}</h2></div>
+        <button className="button button-small button-outline" type="button" onClick={() => dialogRef.current?.close()}>Close</button>
+      </div>
+      <dl className="account-details-grid">
+        <div><dt>Email</dt><dd>{account.email}</dd></div>
+        <div><dt>Phone</dt><dd>{account.phone}</dd></div>
+        <div><dt>Account type</dt><dd>{account.role === "resident" ? "Resident" : account.role}</dd></div>
+        <div><dt>Residency</dt><dd>{account.residencyId?.name || "Not assigned"}</dd></div>
+        <div><dt>Subdivision</dt><dd>{account.subdivisionId?.name || "Not assigned"}</dd></div>
+        <div><dt>Account status</dt><dd>{account.accountLocked ? "Locked" : "Active"}</dd></div>
+        <div><dt>Created</dt><dd>{account.createdAt ? new Date(account.createdAt).toLocaleString() : "Unavailable"}</dd></div>
+      </dl>
+      {editable ? (
+        <div className="account-details-edit">
+          <div className="eyebrow">ASSIGNMENT</div>
+          <label>Account type<select aria-label={`Role for ${account.name}`} value={role} onChange={(event) => setRole(event.target.value)}>
+            <option value="admin">Admin</option><option value="user">Resident</option>
+          </select></label>
+          <label>Residency<select aria-label={`Residency for ${account.name}`} value={residencyId} onChange={changeResidency}>
+            <option value="" disabled>Assign residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}
+          </select></label>
+          <label>Subdivision<select aria-label={`Subdivision for ${account.name}`} value={subdivisionId} onChange={(event) => setSubdivisionId(event.target.value)}>
+            <option value="" disabled>Assign subdivision</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision._id}>{subdivision.name}</option>)}
+          </select></label>
+          <button className="button button-dark" type="button" disabled={!selectedSubdivisionIsValid} onClick={saveAccount}>Save changes</button>
+        </div>
+      ) : <p className="account-details-readonly">Superadmin accounts cannot be reassigned.</p>}
+    </dialog>
+  );
+}
+
+function AccountSettingsDialog({ account, currentUserId, onClose, onSaveName, onResetPassword, onChangePassword, onToggleLock }) {
+  const dialogRef = useRef(null);
+  const [currentAccount, setCurrentAccount] = useState(account);
+  const [name, setName] = useState(currentAccount.name);
+  const [password, setPassword] = useState("");
+  const [working, setWorking] = useState(false);
+  const isCurrentUser = String(currentAccount._id) === String(currentUserId);
+
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
+
+  async function submitName(event) {
+    event.preventDefault();
+    setWorking(true);
+    if (await onSaveName(currentAccount._id, name)) {
+      const updatedName = name.trim();
+      setName(updatedName);
+      setCurrentAccount((current) => ({ ...current, name: updatedName }));
+    }
+    setWorking(false);
+  }
+
+  async function submitPassword(event) {
+    event.preventDefault();
+    setWorking(true);
+    if (await onChangePassword(currentAccount._id, password)) setPassword("");
+    setWorking(false);
+  }
+
+  async function resetPassword() {
+    if (!window.confirm(`Reset ${currentAccount.name}'s password to the temporary password? They will have to choose a new password at next sign-in.`)) return;
+    setWorking(true);
+    await onResetPassword(currentAccount._id);
+    setWorking(false);
+  }
+
+  async function toggleLock() {
+    const action = currentAccount.accountLocked ? "unlock" : "lock";
+    if (!window.confirm(`Are you sure you want to ${action} ${currentAccount.name}'s account?`)) return;
+    setWorking(true);
+    const locked = !currentAccount.accountLocked;
+    if (await onToggleLock(currentAccount._id, locked)) {
+      setCurrentAccount((current) => ({ ...current, accountLocked: locked }));
+    }
+    setWorking(false);
+  }
+
+  return (
+    <dialog className="account-details-dialog account-settings-dialog" ref={dialogRef} onClose={onClose}>
+      <div className="collection-history-heading">
+        <div><div className="eyebrow">ACCOUNT SETTINGS</div><h2>{currentAccount.name}</h2></div>
+        <button className="button button-small button-outline" type="button" onClick={() => dialogRef.current?.close()}>Close</button>
+      </div>
+      <p className="account-created-date">Created {currentAccount.createdAt ? new Date(currentAccount.createdAt).toLocaleString() : "date unavailable"}</p>
+      <form className="account-settings-form" onSubmit={submitName}>
+        <label>Edit user name<input value={name} onChange={(event) => setName(event.target.value)} minLength="2" maxLength="80" required /></label>
+        <button className="button button-dark" type="submit" disabled={working || name.trim() === currentAccount.name}>Save name</button>
+      </form>
+      <form className="account-settings-form" onSubmit={submitPassword}>
+        <label>Change password<input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" maxLength="72" required placeholder="At least 8 characters" /></label>
+        <button className="button button-dark" type="submit" disabled={working || password.length < 8}>Change password</button>
+      </form>
+      <div className="account-settings-actions">
+        <button className="button button-outline" type="button" onClick={resetPassword} disabled={working}>Reset to temporary password</button>
+        {!isCurrentUser && <button className={`button ${currentAccount.accountLocked ? "button-dark" : "button-delete"}`} type="button" onClick={toggleLock} disabled={working}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{currentAccount.accountLocked ? <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 7.7-1.5" /></> : <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>}</svg>
+          {currentAccount.accountLocked ? "Unlock account" : "Lock account"}
+        </button>}
+      </div>
+      {isCurrentUser && <p className="account-settings-note">You can edit your own profile and password here. Your own account cannot be locked from this screen.</p>}
+    </dialog>
   );
 }
 
@@ -638,7 +757,7 @@ function ResidentRequestPanel({ onSubmit, submitting, subdivisionName }) {
   );
 }
 
-function Dashboard({ user, token, onLogout }) {
+function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [schedules, setSchedules] = useState([]);
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
@@ -653,6 +772,9 @@ function Dashboard({ user, token, onLogout }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
   const [configureView, setConfigureView] = useState("residencies");
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [selectedSettingsAccount, setSelectedSettingsAccount] = useState(null);
+  const [accountSearch, setAccountSearch] = useState("");
   const [residentPage, setResidentPage] = useState("resident-calendar");
   const [adminPage, setAdminPage] = useState(() => {
     const page = window.location.hash.slice(1);
@@ -660,6 +782,18 @@ function Dashboard({ user, token, onLogout }) {
   });
   const admin = user.role === "admin";
   const superadmin = user.role === "superadmin";
+  const normalizedAccountSearch = accountSearch.trim().toLocaleLowerCase();
+  const filteredAccounts = users.filter((account) => {
+    if (!normalizedAccountSearch) return true;
+    const role = account.role === "resident" ? "resident" : account.role === "user" ? "resident" : account.role;
+    return [
+      account.name,
+      account.email,
+      role,
+      account.residencyId?.name,
+      account.subdivisionId?.name
+    ].some((value) => String(value || "").toLocaleLowerCase().includes(normalizedAccountSearch));
+  });
 
   async function refreshDashboard() {
     const [scheduleResult, requestResult, userResult, residencyResult, subdivisionResult] = await Promise.all([
@@ -833,8 +967,72 @@ function Dashboard({ user, token, onLogout }) {
       }, token);
       await refreshDashboard();
       setNotice({ message: "Account updated." });
+      return true;
     } catch (error) {
       setNotice({ message: error.message, isError: true });
+      return false;
+    }
+  }
+
+  async function saveAccountName(id, name) {
+    try {
+      const result = await api(`/users/${encodeURIComponent(id)}/profile`, {
+        method: "PATCH",
+        body: JSON.stringify({ name })
+      }, token);
+      await refreshDashboard();
+      if (String(id) === String(user.id)) onUserUpdate({ name: result.user.name });
+      setNotice({ message: "Account name updated." });
+      return true;
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+      return false;
+    }
+  }
+
+  async function resetAccountPassword(id) {
+    try {
+      const result = await api(`/users/${encodeURIComponent(id)}/reset-password`, { method: "POST" }, token);
+      if (String(id) === String(user.id)) {
+        window.alert(`${result.message} You will now be signed out. Sign in again with the temporary password to continue.`);
+        onLogout();
+        return true;
+      }
+      await refreshDashboard();
+      setNotice({ message: result.message });
+      return true;
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+      return false;
+    }
+  }
+
+  async function changeAccountPassword(id, password) {
+    try {
+      const result = await api(`/users/${encodeURIComponent(id)}/password`, {
+        method: "PATCH",
+        body: JSON.stringify({ password })
+      }, token);
+      setNotice({ message: result.message });
+      return true;
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+      return false;
+    }
+  }
+
+  async function setAccountLocked(id, locked) {
+    try {
+      const result = await api(`/users/${encodeURIComponent(id)}/lock`, {
+        method: "PATCH",
+        body: JSON.stringify({ locked })
+      }, token);
+      await refreshDashboard();
+      setNotice({ message: result.message });
+      return true;
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+      return false;
     }
   }
 
@@ -1025,8 +1223,19 @@ function Dashboard({ user, token, onLogout }) {
                 <AccountForm onSubmit={createAccount} admin={false} canCreateSuperadmin residencies={residencies} subdivisions={subdivisions} />
               </div>
               <div className="panel accounts-list-panel">
-                <div className="panel-heading"><div><div className="eyebrow">ACCOUNT DIRECTORY</div><h2>Existing accounts</h2></div><span className="count-badge">{users.length}</span></div>
-                {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <ManagedAccountRow key={account._id} account={account} residencies={residencies} subdivisions={subdivisions} onSave={updateAccount} />)}</div> : <div className="empty-state"><p>No accounts yet. Create an account to get started.</p></div>}
+                <div className="panel-heading"><div><div className="eyebrow">ACCOUNT DIRECTORY</div><h2>Existing accounts</h2></div><span className="count-badge">{normalizedAccountSearch ? `${filteredAccounts.length} / ${users.length}` : users.length}</span></div>
+                <label className="account-search">
+                  <span className="visually-hidden">Search accounts by name, email, type, residency, or subdivision</span>
+                  <input type="search" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="Search name, email, type, residency, or subdivision" />
+                </label>
+                {loading ? <div className="empty-state"><p>Loading accounts...</p></div> : filteredAccounts.length ? (
+                  <div className="accounts-table-scroll">
+                    <table className="accounts-table">
+                      <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Residency</th><th>Subdivision</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
+                      <tbody>{filteredAccounts.map((account) => <ManagedAccountRow key={account._id} account={account} onView={setSelectedAccount} onSettings={setSelectedSettingsAccount} currentUserId={user.id} />)}</tbody>
+                    </table>
+                  </div>
+                ) : <div className="empty-state"><p>{users.length ? "No accounts match your search." : "No accounts yet. Create an account to get started."}</p></div>}
               </div>
             </section>
           )}
@@ -1127,6 +1336,28 @@ function Dashboard({ user, token, onLogout }) {
         loading={historyLoading}
         scopeLabel={superadmin ? "All residencies" : `${user.residencyName || "Your assigned residency"} only`}
       />
+      {superadmin && selectedAccount && (
+        <AccountDetailsDialog
+          key={selectedAccount._id}
+          account={selectedAccount}
+          residencies={residencies}
+          subdivisions={subdivisions}
+          onSave={updateAccount}
+          onClose={() => setSelectedAccount(null)}
+        />
+      )}
+      {superadmin && selectedSettingsAccount && (
+        <AccountSettingsDialog
+          key={selectedSettingsAccount._id}
+          account={selectedSettingsAccount}
+          currentUserId={user.id}
+          onClose={() => setSelectedSettingsAccount(null)}
+          onSaveName={saveAccountName}
+          onResetPassword={resetAccountPassword}
+          onChangePassword={changeAccountPassword}
+          onToggleLock={setAccountLocked}
+        />
+      )}
       <Footer />
     </main>
   );
@@ -1165,8 +1396,12 @@ function App() {
     setPasswordChange(null);
   }
 
+  function updateAuthenticatedUser(updates) {
+    setAuth((current) => current ? { ...current, user: { ...current.user, ...updates } } : current);
+  }
+
   if (checkingSession) return <main className="page-shell"><div className="empty-state">Loading your community...</div></main>;
-  if (auth) return <Dashboard key={auth.user.id} user={auth.user} token={auth.token} onLogout={logout} />;
+  if (auth) return <Dashboard key={auth.user.id} user={auth.user} token={auth.token} onLogout={logout} onUserUpdate={updateAuthenticatedUser} />;
   return (
     <Landing
       passwordChange={passwordChange}

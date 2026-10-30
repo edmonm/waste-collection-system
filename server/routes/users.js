@@ -24,6 +24,15 @@ const updateSchema = z.object({
   subdivisionId: z.string().regex(/^[a-f\d]{24}$/i),
   role: z.enum(["admin", "user"])
 });
+const accountNameSchema = z.object({
+  name: z.string().trim().min(2).max(80)
+});
+const accountPasswordSchema = z.object({
+  password: z.string().min(8).max(72).refine((password) => password !== temporaryPassword, "Choose a password other than the temporary password.")
+});
+const accountLockSchema = z.object({
+  locked: z.boolean()
+});
 
 router.use(authenticate, requireAnyRole("admin", "superadmin"));
 
@@ -33,10 +42,10 @@ router.get("/", async (request, response, next) => {
       return response.status(403).json({ error: "Your account needs a subdivision assignment to manage residents." });
     }
     const filter = request.user.role === "superadmin"
-      ? { _id: { $ne: request.user._id } }
+      ? {}
       : { residencyId: request.user.residencyId, subdivisionId: request.user.subdivisionId, role: { $in: ["user", "resident"] } };
     const users = await User.find(filter)
-      .select("name email phone role residencyId subdivisionId createdAt")
+      .select("name email phone role residencyId subdivisionId createdAt accountLocked")
       .populate(["residencyId", "subdivisionId"])
       .sort({ name: 1 })
       .limit(500)
@@ -150,6 +159,86 @@ router.patch("/:id", async (request, response, next) => {
         subdivisionName: subdivision.name
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/:id/profile", async (request, response, next) => {
+  try {
+    if (request.user.role !== "superadmin") {
+      return response.status(403).json({ error: "Only a superadmin can edit account profiles." });
+    }
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid account identifier." });
+    }
+    const { name } = accountNameSchema.parse(request.body);
+    const account = await User.findByIdAndUpdate(request.params.id, { name }, { new: true, runValidators: true })
+      .select("name email phone role residencyId subdivisionId createdAt accountLocked")
+      .populate(["residencyId", "subdivisionId"])
+      .lean();
+    if (!account) return response.status(404).json({ error: "Account not found." });
+    return response.json({ user: account });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/:id/reset-password", async (request, response, next) => {
+  try {
+    if (request.user.role !== "superadmin") {
+      return response.status(403).json({ error: "Only a superadmin can reset account passwords." });
+    }
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid account identifier." });
+    }
+    const account = await User.findById(request.params.id).select("+passwordHash");
+    if (!account) return response.status(404).json({ error: "Account not found." });
+    account.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    account.mustChangePassword = true;
+    await account.save();
+    return response.json({ message: "Password reset. The account must use the temporary password and choose a new password at next login." });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/:id/password", async (request, response, next) => {
+  try {
+    if (request.user.role !== "superadmin") {
+      return response.status(403).json({ error: "Only a superadmin can change account passwords." });
+    }
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid account identifier." });
+    }
+    const { password } = accountPasswordSchema.parse(request.body);
+    const account = await User.findById(request.params.id).select("+passwordHash");
+    if (!account) return response.status(404).json({ error: "Account not found." });
+    account.passwordHash = await bcrypt.hash(password, 12);
+    account.mustChangePassword = false;
+    await account.save();
+    return response.json({ message: "Account password changed." });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/:id/lock", async (request, response, next) => {
+  try {
+    if (request.user.role !== "superadmin") {
+      return response.status(403).json({ error: "Only a superadmin can lock or unlock accounts." });
+    }
+    if (!mongoose.isValidObjectId(request.params.id)) {
+      return response.status(400).json({ error: "Invalid account identifier." });
+    }
+    if (String(request.user._id) === request.params.id) {
+      return response.status(400).json({ error: "You cannot lock or unlock your own account." });
+    }
+    const { locked } = accountLockSchema.parse(request.body);
+    const account = await User.findByIdAndUpdate(request.params.id, { accountLocked: locked }, { new: true })
+      .select("name accountLocked");
+    if (!account) return response.status(404).json({ error: "Account not found." });
+    return response.json({ message: `Account ${locked ? "locked" : "unlocked"}.`, accountLocked: account.accountLocked });
   } catch (error) {
     return next(error);
   }

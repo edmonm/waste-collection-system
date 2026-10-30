@@ -49,6 +49,7 @@ router.post("/login", async (request, response, next) => {
     if (!user || (input.loginAs && actualRole !== input.loginAs) || !(await bcrypt.compare(input.password, user.passwordHash))) {
       return response.status(401).json({ error: "Email or password is incorrect." });
     }
+    if (user.accountLocked) return response.status(403).json({ error: "This account is locked. Contact a superadmin for assistance." });
     if (actualRole !== "superadmin") {
       if (!user.residencyId) {
         return response.status(403).json({ error: "This account has no residency assigned. Ask a superadmin for help." });
@@ -89,7 +90,7 @@ router.post("/change-password", async (request, response, next) => {
 
     const { newPassword } = changePasswordSchema.parse(request.body);
     const user = await User.findOneAndUpdate(
-      { _id: payload.sub, mustChangePassword: true, role: { $in: ["superadmin", "admin", "user"] } },
+      { _id: payload.sub, mustChangePassword: true, accountLocked: { $ne: true }, role: { $in: ["superadmin", "admin", "user"] } },
       { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
       { new: true, runValidators: true }
     );
