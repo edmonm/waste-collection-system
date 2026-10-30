@@ -145,12 +145,30 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
   .auth-header-note { font-size: 8px; letter-spacing: .8px; }
   .auth-card { padding: 18px; }
 }
-.dashboard-tabs { display: flex; gap: 5px; padding: 5px; margin: 0 0 18px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
-.dashboard-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 7px; padding: 9px 13px; background: transparent; color: #64705f; font-size: 10px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+.dashboard-tabs { position: relative; display: flex; gap: 5px; padding: 5px; margin: 0 0 18px; overflow-x: auto; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
+.dashboard-tabs-sliding::before { content: ""; position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 5px; border-radius: 7px; background: #304f3a; transition: transform .32s cubic-bezier(.22, 1, .36, 1); pointer-events: none; }
+.dashboard-tabs-sliding.tab-count-5::before { width: calc((100% - 30px) / 5); }
+.dashboard-tabs-sliding.tab-count-3::before { width: calc((100% - 20px) / 3); }
+.dashboard-tabs-sliding.tab-count-2::before { width: calc((100% - 15px) / 2); }
+.dashboard-tabs-sliding.tab-position-1::before { transform: translateX(calc(100% + 5px)); }
+.dashboard-tabs-sliding.tab-position-2::before { transform: translateX(calc(200% + 10px)); }
+.dashboard-tabs-sliding.tab-position-3::before { transform: translateX(calc(300% + 15px)); }
+.dashboard-tabs-sliding.tab-position-4::before { transform: translateX(calc(400% + 20px)); }
+.dashboard-tab { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 7px; padding: 9px 13px; background: transparent; color: #64705f; font-size: 10px; font-weight: 700; cursor: pointer; transition: background-color .28s ease, color .28s ease, box-shadow .28s ease; }
+.dashboard-tabs-sliding .dashboard-tab { position: relative; z-index: 1; }
 .dashboard-tab:hover, .dashboard-tab:focus-visible { background: #eff4e9; color: #304f3a; outline: none; }
 .dashboard-tab.active, .dashboard-tab.active:hover { background: #304f3a; color: #fff; }
+.dashboard-tabs-sliding .dashboard-tab.active, .dashboard-tabs-sliding .dashboard-tab.active:hover { background: transparent; color: #fff; }
 .dashboard-tab span { min-width: 17px; padding: 3px 5px; border-radius: 12px; background: #fbf1dc; color: #9a7833; text-align: center; font-size: 8px; }
 .dashboard-tab.active span { background: #fff; color: #304f3a; }
+.superadmin-content, .superadmin-operations, .admin-request-content,
+.admin-residents-section, .resident-calendar, .resident-request-page, .request-mailbox {
+  animation: dashboardPageEnter .26s cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes dashboardPageEnter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .superadmin-content { margin-bottom: 20px; }
 .accounts-management-grid { width: min(1320px, 100%); margin: 0 auto 20px; display: grid; grid-template-columns: minmax(300px, .82fr) minmax(0, 1.18fr); align-items: start; gap: 18px; }
 .accounts-management-grid > .panel { min-width: 0; height: 100%; }
@@ -196,7 +214,15 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .account-settings-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 900px) { .accounts-management-grid { grid-template-columns: minmax(250px, .75fr) minmax(0, 1.25fr); gap: 12px; } }
-@media (max-width: 760px) { .accounts-management-grid { grid-template-columns: 1fr; }.accounts-table-scroll { max-height: 55vh; }.account-details-dialog { padding: 18px; }.account-details-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .accounts-management-grid { grid-template-columns: 1fr; }.accounts-table-scroll { max-height: 55vh; }.account-details-dialog { padding: 18px; }.account-details-grid { grid-template-columns: 1fr; }.dashboard-tabs-sliding::before { display: none; }.dashboard-tabs-sliding .dashboard-tab.active, .dashboard-tabs-sliding .dashboard-tab.active:hover { background: #304f3a; } }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-tab { transition: none; }
+  .dashboard-tabs-sliding::before { transition: none; }
+  .superadmin-content, .superadmin-operations, .admin-request-content,
+  .admin-residents-section, .resident-calendar, .resident-request-page, .request-mailbox {
+    animation: none;
+  }
+}
 .admin-overview-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .overview-stat { display: grid; gap: 7px; padding: 17px; border: 1px solid #e6eae2; border-radius: 10px; background: #fff; }
@@ -292,6 +318,14 @@ footer { min-height: 62px; display: flex; align-items: center; justify-content: 
 .dashboard-heading p, .dashboard-shell .notice { font-size: 14px; }
 .dashboard-shell .eyebrow { font-size: 10px; }
 .dashboard-tabs { gap: 7px; padding: 6px; }
+.dashboard-shell .dashboard-tabs-sliding::before { top: 6px; bottom: 6px; left: 6px; }
+.dashboard-shell .dashboard-tabs-sliding.tab-count-5::before { width: calc((100% - 40px) / 5); }
+.dashboard-shell .dashboard-tabs-sliding.tab-count-3::before { width: calc((100% - 26px) / 3); }
+.dashboard-shell .dashboard-tabs-sliding.tab-count-2::before { width: calc((100% - 19px) / 2); }
+.dashboard-shell .dashboard-tabs-sliding.tab-position-1::before { transform: translateX(calc(100% + 7px)); }
+.dashboard-shell .dashboard-tabs-sliding.tab-position-2::before { transform: translateX(calc(200% + 14px)); }
+.dashboard-shell .dashboard-tabs-sliding.tab-position-3::before { transform: translateX(calc(300% + 21px)); }
+.dashboard-shell .dashboard-tabs-sliding.tab-position-4::before { transform: translateX(calc(400% + 28px)); }
 .dashboard-tab { padding: 11px 16px; font-size: 13px; }
 .dashboard-tab span { font-size: 10px; }
 .dashboard-grid, .management-grid { gap: 20px; }

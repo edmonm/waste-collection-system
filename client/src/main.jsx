@@ -15,6 +15,13 @@ const residentPageLinks = [
   ["resident-requests", "Request"],
   ["resident-mailbox", "Mailbox"]
 ];
+const superadminPageLinks = [
+  ["overview", "Overview"],
+  ["configure", "Configure"],
+  ["accounts", "Accounts"],
+  ["collections", "Collections"],
+  ["requests", "Request"]
+];
 
 function localDateKey(date) {
   const year = date.getFullYear();
@@ -1139,7 +1146,10 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
       <section className="dashboard-heading"><div><div className="eyebrow">{superadmin ? "SYSTEM MANAGEMENT" : admin ? `RESIDENCY ADMINISTRATION${user.residencyName ? ` · ${user.residencyName}` : ""}${user.subdivisionName ? ` · ${user.subdivisionName}` : ""}` : `YOUR NEIGHBORHOOD${user.residencyName ? ` · ${user.residencyName}` : ""}${user.subdivisionName ? ` · ${user.subdivisionName}` : ""}`}</div><h1>{superadmin || admin ? "Good day, " : "Welcome, "}<span>{user.name.split(" ")[0]}.</span></h1><p>{superadmin ? "Manage residencies, administrators, subdivisions, and system-wide operations." : admin ? "Manage residents and requests for your subdivision; collection notices are shared residency-wide." : "Your collection schedule and community updates, all in one place."}</p></div><div className="heading-stamp">{superadmin ? "✳" : admin ? "✳" : "✦"}</div></section>
       <Notice notice={notice} />
       {!superadmin && (
-        <nav className={`dashboard-tabs${admin ? "" : " resident-dashboard-tabs"}`} aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}>
+        <nav
+          className={`dashboard-tabs dashboard-tabs-sliding tab-count-${(admin ? adminPageLinks : residentPageLinks).length} tab-position-${(admin ? adminPageLinks : residentPageLinks).findIndex(([id]) => (admin ? adminPage : residentPage) === id)}${admin ? "" : " resident-dashboard-tabs"}`}
+          aria-label={`${admin ? "Admin" : "Resident"} dashboard navigation`}
+        >
           {(admin ? adminPageLinks : residentPageLinks).map(([id, label]) => {
             const selected = (admin ? adminPage : residentPage) === id;
             return (
@@ -1158,8 +1168,11 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
       )}
       {superadmin ? (
         <>
-          <nav className="dashboard-tabs" aria-label="Superadmin sections">
-            {[["overview", "Overview"], ["configure", "Configure"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
+          <nav
+            className={`dashboard-tabs dashboard-tabs-sliding tab-count-${superadminPageLinks.length} tab-position-${superadminPageLinks.findIndex(([view]) => superadminView === view)}`}
+            aria-label="Superadmin sections"
+          >
+            {superadminPageLinks.map(([view, label]) => (
               <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}{view === "requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}</button>
             ))}
           </nav>
@@ -1185,7 +1198,10 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
           )}
           {superadminView === "configure" && (
             <>
-              <nav className="dashboard-tabs configure-tabs" aria-label="Configuration sections">
+              <nav
+                className={`dashboard-tabs dashboard-tabs-sliding configure-tabs tab-count-2 tab-position-${configureView === "residencies" ? 0 : 1}`}
+                aria-label="Configuration sections"
+              >
                 {[["residencies", "Residencies"], ["subdivisions", "Subdivisions"]].map(([view, label]) => (
                   <button key={view} type="button" className={`dashboard-tab${configureView === view ? " active" : ""}`} aria-current={configureView === view ? "page" : undefined} onClick={() => setConfigureView(view)}>{label}</button>
                 ))}
