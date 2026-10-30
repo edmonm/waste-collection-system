@@ -652,6 +652,7 @@ function Dashboard({ user, token, onLogout }) {
   const [historySchedules, setHistorySchedules] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [superadminView, setSuperadminView] = useState("overview");
+  const [configureView, setConfigureView] = useState("residencies");
   const [residentPage, setResidentPage] = useState("resident-calendar");
   const [adminPage, setAdminPage] = useState(() => {
     const page = window.location.hash.slice(1);
@@ -960,7 +961,7 @@ function Dashboard({ user, token, onLogout }) {
       {superadmin ? (
         <>
           <nav className="dashboard-tabs" aria-label="Superadmin sections">
-            {[["overview", "Overview"], ["residencies", "Residencies"], ["subdivisions", "Subdivisions"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
+            {[["overview", "Overview"], ["configure", "Configure"], ["accounts", "Accounts"], ["collections", "Collections"], ["requests", "Request"]].map(([view, label]) => (
               <button key={view} type="button" className={`dashboard-tab${superadminView === view ? " active" : ""}`} aria-current={superadminView === view ? "page" : undefined} onClick={() => setSuperadminView(view)}>{label}{view === "requests" && openRequestCount > 0 && <span>{openRequestCount}</span>}</button>
             ))}
           </nav>
@@ -984,29 +985,38 @@ function Dashboard({ user, token, onLogout }) {
               </div>
             </section>
           )}
-          {superadminView === "residencies" && (
-            <section className="superadmin-content panel">
-              <div className="panel-heading"><div><div className="eyebrow">SYSTEM SETUP</div><h2>Manage residencies</h2></div><span className="count-badge">{residencies.length}</span></div>
-              <form className="residency-create-form" onSubmit={createResidency}>
-                <label>Residency name<input name="name" required minLength="2" maxLength="100" placeholder="Enter a residency name" /></label>
-                <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Creating..." : "Create residency"}</button>
-              </form>
-              {loading ? <div className="empty-state"><p>Loading residencies...</p></div> : residencies.length ? <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><div><strong>{residency.name}</strong><small>{residency.active ? "Active" : "Inactive"}</small></div><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div> : <div className="empty-state"><p>No residencies yet. Create one to get started.</p></div>}
-            </section>
-          )}
-          {superadminView === "subdivisions" && (
-            <section className="superadmin-content panel">
-              <div className="panel-heading"><div><div className="eyebrow">RESIDENCY ORGANIZATION</div><h2>Manage subdivisions</h2></div><span className="count-badge">{subdivisions.length}</span></div>
-              <SubdivisionForm residencies={residencies} subdivisions={subdivisions} onSubmit={createSubdivision} submitting={submitting} />
-              {subdivisions.length ? (
-                <div className="resident-list">{subdivisions.map((subdivision) => (
-                  <article key={subdivision._id} className="resident-row">
-                    <div><strong>{subdivision.name}</strong><small>{subdivision.residencyId?.name || "Residency unavailable"}</small></div>
-                    <span className="status-pill">subdivision</span>
-                  </article>
-                ))}</div>
-              ) : <div className="empty-state"><p>No subdivisions yet. Add a subdivision for each residency.</p></div>}
-            </section>
+          {superadminView === "configure" && (
+            <>
+              <nav className="dashboard-tabs configure-tabs" aria-label="Configuration sections">
+                {[["residencies", "Residencies"], ["subdivisions", "Subdivisions"]].map(([view, label]) => (
+                  <button key={view} type="button" className={`dashboard-tab${configureView === view ? " active" : ""}`} aria-current={configureView === view ? "page" : undefined} onClick={() => setConfigureView(view)}>{label}</button>
+                ))}
+              </nav>
+              {configureView === "residencies" && (
+                <section className="superadmin-content panel">
+                  <div className="panel-heading"><div><div className="eyebrow">SYSTEM SETUP</div><h2>Manage residencies</h2></div><span className="count-badge">{residencies.length}</span></div>
+                  <form className="residency-create-form" onSubmit={createResidency}>
+                    <label>Residency name<input name="name" required minLength="2" maxLength="100" placeholder="Enter a residency name" /></label>
+                    <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Creating..." : "Create residency"}</button>
+                  </form>
+                  {loading ? <div className="empty-state"><p>Loading residencies...</p></div> : residencies.length ? <div className="resident-list">{residencies.map((residency) => <article key={residency._id} className="resident-row"><div><strong>{residency.name}</strong><small>{residency.active ? "Active" : "Inactive"}</small></div><button type="button" className="button button-small button-outline" onClick={() => toggleResidency(residency)}>{residency.active ? "Deactivate" : "Activate"}</button></article>)}</div> : <div className="empty-state"><p>No residencies yet. Create one to get started.</p></div>}
+                </section>
+              )}
+              {configureView === "subdivisions" && (
+                <section className="superadmin-content panel">
+                  <div className="panel-heading"><div><div className="eyebrow">RESIDENCY ORGANIZATION</div><h2>Manage subdivisions</h2></div><span className="count-badge">{subdivisions.length}</span></div>
+                  <SubdivisionForm residencies={residencies} subdivisions={subdivisions} onSubmit={createSubdivision} submitting={submitting} />
+                  {subdivisions.length ? (
+                    <div className="resident-list">{subdivisions.map((subdivision) => (
+                      <article key={subdivision._id} className="resident-row">
+                        <div><strong>{subdivision.name}</strong><small>{subdivision.residencyId?.name || "Residency unavailable"}</small></div>
+                        <span className="status-pill">subdivision</span>
+                      </article>
+                    ))}</div>
+                  ) : <div className="empty-state"><p>No subdivisions yet. Add a subdivision for each residency.</p></div>}
+                </section>
+              )}
+            </>
           )}
           {superadminView === "accounts" && (
             <section className="superadmin-content accounts-management-grid">
