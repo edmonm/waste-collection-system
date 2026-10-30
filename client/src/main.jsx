@@ -348,21 +348,25 @@ function ResidentCalendar({ schedules, requests }) {
       </div>
       <div className="calendar-day-details" aria-live="polite">
         <h3>{dateKeyDate(selectedDate).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
-        {dayEvents.length ? dayEvents.map((event) => event.type === "collection" ? (
-          <article className="calendar-event" key={`schedule-${event.schedule._id}`}>
-            <span className="status-pill">{event.schedule.wasteType}</span>
-            <strong>Collection · {event.schedule.area}</strong>
-            <p>Estimated arrival: {formatArrivalTime(event.schedule.estimatedArrivalTime)}</p>
-            {event.schedule.notes && <p>{event.schedule.notes}</p>}
-          </article>
-        ) : (
-          <article className="calendar-event approved-request-event" key={`request-${event.request._id}`}>
-            <span className="status-pill">Approved request</span>
-            <strong>{event.request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</strong>
-            <p>{event.request.description}</p>
-            <p>Estimated collection time: {event.request.scheduledTime ? formatArrivalTime(event.request.scheduledTime) : "Not provided"}</p>
-          </article>
-        )) : <p className="calendar-no-events">No collections or approved requests for this day.</p>}
+        {dayEvents.length ? (
+          <div className="calendar-day-event-list">
+            {dayEvents.map((event) => event.type === "collection" ? (
+              <article className="calendar-event" key={`schedule-${event.schedule._id}`}>
+                <span className="status-pill">{event.schedule.wasteType}</span>
+                <strong>Collection · {event.schedule.area}</strong>
+                <p>Estimated arrival: {formatArrivalTime(event.schedule.estimatedArrivalTime)}</p>
+                {event.schedule.notes && <p>{event.schedule.notes}</p>}
+              </article>
+            ) : (
+              <article className="calendar-event approved-request-event" key={`request-${event.request._id}`}>
+                <span className="status-pill">Approved request</span>
+                <strong>{event.request.kind === "missed_pickup" ? "Missed pickup" : "Special request"}</strong>
+                <p>{event.request.description}</p>
+                <p>Estimated collection time: {event.request.scheduledTime ? formatArrivalTime(event.request.scheduledTime) : "Not provided"}</p>
+              </article>
+            ))}
+          </div>
+        ) : <p className="calendar-no-events">No collections or approved requests for this day.</p>}
       </div>
     </section>
   );
@@ -1265,8 +1269,18 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
                     <span className="count-badge">{schedules.length}</span>
                   </div>
                 </div>
-                <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                <div className="collection-management-layout">
+                  <section className="collection-create-column">
+                    <div className="eyebrow">CREATE COLLECTION</div>
+                    <ScheduleForm onSubmit={submitSchedule} residencies={residencies} />
+                  </section>
+                  <section className="collection-list-column">
+                    <div className="panel-heading"><div><div className="eyebrow">PUBLISHED COLLECTIONS</div><h3>Collection list</h3></div><span className="count-badge">{schedules.length}</span></div>
+                    <div className="collection-schedule-scroll">
+                      {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                    </div>
+                  </section>
+                </div>
               </div>
             </section>
           )}
@@ -1310,9 +1324,17 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <span className="count-badge">{schedules.length}</span>
                 </div>
               </div>
-              <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
-              <div className="schedule-list">
-                {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />) : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+              <div className="collection-management-layout">
+                <section className="collection-create-column">
+                  <div className="eyebrow">CREATE COLLECTION</div>
+                  <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
+                </section>
+                <section className="collection-list-column">
+                  <div className="panel-heading"><div><div className="eyebrow">PUBLISHED COLLECTIONS</div><h3>Collection list</h3></div><span className="count-badge">{schedules.length}</span></div>
+                  <div className="collection-schedule-scroll">
+                    {loading ? <div className="empty-state"><p>Loading schedules...</p></div> : schedules.length ? <div className="schedule-list">{schedules.map((schedule) => <ScheduleCard key={schedule._id} schedule={schedule} onDelete={deleteSchedule} />)}</div> : <div className="empty-state"><span>▦</span><p>No collection schedules have been posted yet.</p></div>}
+                  </div>
+                </section>
               </div>
             </section>
           )}
@@ -1324,10 +1346,13 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
           )}
           {adminPage === "admin-residents" && (
             <section className="management-grid admin-residents-section">
-              <div className="panel">
-                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Manage residents{user.subdivisionName ? ` · ${user.subdivisionName}` : ""}</h2></div><span className="count-badge">{users.length}</span></div>
+              <div className="panel admin-resident-create-panel">
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT ACCESS</div><h2>Create resident</h2></div></div>
                 <AccountForm onSubmit={createAccount} admin residencies={residencies} subdivisions={subdivisions} residencyName={user.residencyName} subdivisionName={user.subdivisionName} />
-                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><span className="status-pill">resident</span><button className="button button-small button-delete" type="button" onClick={() => deleteResidentAccount(account)}>Delete</button></div></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account above.</p></div>}
+              </div>
+              <div className="panel admin-resident-list-panel">
+                <div className="panel-heading"><div><div className="eyebrow">RESIDENT DIRECTORY</div><h2>Residents{user.subdivisionName ? ` · ${user.subdivisionName}` : ""}</h2></div><span className="count-badge">{users.length}</span></div>
+                {loading ? <div className="empty-state"><p>Loading residents...</p></div> : users.length ? <div className="resident-list admin-resident-list">{users.map((account) => <article key={account._id} className="resident-row"><div><strong>{account.name}</strong><small>{account.email} · {account.phone}</small></div><div className="resident-admin-actions"><span className="status-pill">resident</span><button className="button button-small button-delete" type="button" onClick={() => deleteResidentAccount(account)}>Delete</button></div></article>)}</div> : <div className="empty-state"><p>No residents yet. Create an account to get started.</p></div>}
               </div>
             </section>
           )}
