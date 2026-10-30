@@ -3,7 +3,9 @@ import mongoose from "mongoose";
 import { z } from "zod";
 import { authenticate, requireAnyRole, requireRole } from "../middleware/auth.js";
 import { ServiceRequest } from "../models/ServiceRequest.js";
+import { User } from "../models/User.js";
 import { sendSms } from "../services/sms.js";
+import { formatDateKey, formatTime24Hour, manilaDateTime } from "../utils/dateTime.js";
 
 const router = Router();
 const createSchema = z.object({
@@ -11,25 +13,45 @@ const createSchema = z.object({
   description: z.string().trim().min(1).max(1000)
 });
 const updateSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("approved"), scheduledDate: z.iso.date() }),
+  z.object({
+    status: z.literal("approved"),
+    scheduledDate: z.iso.date(),
+    scheduledTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+  }),
   z.object({ status: z.literal("declined"), declineReason: z.string().trim().min(1).max(500) })
 ]);
+
+async function adminSubdivisionFilter(user) {
+  if (!user.subdivisionId) return null;
+  const residentIds = await User.find({
+    residencyId: user.residencyId,
+    subdivisionId: user.subdivisionId,
+    role: { $in: ["user", "resident"] }
+  }).distinct("_id");
+  return {
+    residencyId: user.residencyId,
+    $or: [
+      { subdivisionId: user.subdivisionId },
+      { subdivisionId: null, resident: { $in: residentIds } }
+    ]
+  };
+}
 
 router.use(authenticate);
 
 router.post("/", requireRole("user"), async (request, response, next) => {
   try {
+    if (!request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment before submitting requests." });
+    }
     const input = createSchema.parse(request.body);
     const serviceRequest = await ServiceRequest.create({
       ...input,
       resident: request.user.id,
-      residencyId: request.user.residencyId
+      residencyId: request.user.residencyId,
+      subdivisionId: request.user.subdivisionId
     });
-    const notification = await sendSms(
-      request.user.phone,
-      "GreenLoop has received your community collection request. Your team will review it soon."
-    );
-    return response.status(201).json({ request: serviceRequest, notification });
+    return response.status(201).json({ request: serviceRequest });
   } catch (error) {
     return next(error);
   }
@@ -40,8 +62,11 @@ router.get("/", requireAnyRole("admin", "superadmin", "user"), async (request, r
     const filter = request.user.role === "superadmin"
       ? {}
       : request.user.role === "admin"
-        ? { residencyId: request.user.residencyId }
+        ? await adminSubdivisionFilter(request.user)
         : { resident: request.user.id, residencyId: request.user.residencyId };
+    if (request.user.role === "admin" && !filter) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const requests = await ServiceRequest.find(filter)
       .populate("resident", "name phone email")
       .sort({ createdAt: -1 })
@@ -61,12 +86,41 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
     }
     const filter = request.user.role === "superadmin"
       ? { _id: request.params.id }
-      : { _id: request.params.id, residencyId: request.user.residencyId };
+      : {
+        ...await adminSubdivisionFilter(request.user),
+        _id: request.params.id,
+        residencyId: request.user.residencyId
+      };
+    if (request.user.role === "admin" && !request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const serviceRequest = await ServiceRequest.findOneAndUpdate(
       { ...filter, status: "pending" },
       decision.status === "approved"
-        ? { status: decision.status, scheduledDate: new Date(`${decision.scheduledDate}T00:00:00.000Z`), declineReason: "" }
-        : { status: decision.status, scheduledDate: null, declineReason: decision.declineReason },
+        ? {
+          status: decision.status,
+          scheduledDate: new Date(`${decision.scheduledDate}T00:00:00.000Z`),
+          scheduledTime: decision.scheduledTime,
+          scheduledAt: manilaDateTime(decision.scheduledDate, decision.scheduledTime),
+          scheduledSmsStatus: "pending",
+          scheduledSmsClaimedAt: null,
+          scheduledSmsNextAttemptAt: null,
+          scheduledSmsSentAt: null,
+          subdivisionId: request.user.role === "admin" ? request.user.subdivisionId : undefined,
+          declineReason: ""
+        }
+        : {
+          status: decision.status,
+          scheduledDate: null,
+          scheduledTime: null,
+          scheduledAt: null,
+          scheduledSmsStatus: null,
+          scheduledSmsClaimedAt: null,
+          scheduledSmsNextAttemptAt: null,
+          scheduledSmsSentAt: null,
+          subdivisionId: request.user.role === "admin" ? request.user.subdivisionId : undefined,
+          declineReason: decision.declineReason
+        },
       { new: true, runValidators: true }
     ).populate("resident", "name phone email");
     if (!serviceRequest) {
@@ -77,7 +131,7 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
     const notification = decision.status === "approved"
       ? await sendSms(
         serviceRequest.resident.phone,
-        `GreenLoop approved your community collection request for ${decision.scheduledDate}.`
+        `GreenLoop approved your community collection. Estimated collection time: ${formatDateKey(decision.scheduledDate)} at ${formatTime24Hour(decision.scheduledTime)} Philippines time.`
       )
       : await sendSms(
         serviceRequest.resident.phone,
@@ -89,14 +143,19 @@ router.patch("/:id", requireAnyRole("admin", "superadmin"), async (request, resp
   }
 });
 
-router.delete("/:id", requireAnyRole("admin", "superadmin"), async (request, response, next) => {
+router.delete("/:id", requireAnyRole("admin", "superadmin", "user"), async (request, response, next) => {
   try {
     if (!mongoose.isValidObjectId(request.params.id)) {
       return response.status(400).json({ error: "Invalid request identifier." });
     }
     const filter = request.user.role === "superadmin"
       ? { _id: request.params.id }
-      : { _id: request.params.id, residencyId: request.user.residencyId };
+      : request.user.role === "admin"
+        ? { ...await adminSubdivisionFilter(request.user), _id: request.params.id, residencyId: request.user.residencyId }
+        : { _id: request.params.id, resident: request.user.id, residencyId: request.user.residencyId };
+    if (request.user.role === "admin" && !request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment to manage requests." });
+    }
     const serviceRequest = await ServiceRequest.findOneAndDelete(filter);
     if (!serviceRequest) return response.status(404).json({ error: "Service request not found." });
     return response.json({ message: "Service request deleted." });

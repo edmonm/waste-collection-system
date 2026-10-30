@@ -7,7 +7,7 @@ GreenLoop helps a community publish waste collection schedules, notify residents
 - **Frontend:** React, JavaScript, Vite, Tailwind CSS
 - **Backend:** Node.js, Express, JSON REST API
 - **Database:** MongoDB with Mongoose
-- **SMS:** Optional Twilio integration
+- **SMS:** Optional TextBee integration using an Android phone as the gateway
 
 ## Requirements
 
@@ -70,7 +70,7 @@ SUPERADMIN_PHONE=+639171234567
 - For MongoDB Atlas, replace `MONGODB_URI` with your Atlas connection URI. Make sure your IP address and database credentials are allowed by Atlas.
 - Replace the superadmin example details with your own. The password must be **8-72 characters**. Phone numbers must use Philippine mobile format: `+639` followed by 9 digits.
 - Use a long, private random value for `JWT_SECRET`. Do not share or commit `.env`.
-- Twilio variables are optional. Leave them blank to use the app without SMS delivery.
+- TextBee variables are optional. Leave them blank to use the app without SMS delivery.
 
 ### 4. Create the initial superadmin
 
@@ -101,19 +101,23 @@ After the app is running:
 
 1. On the sign-in page, choose **Login** and sign in with the superadmin email and password from `.env`.
 2. In the superadmin dashboard, create a **residency**.
-3. Create an **Admin** account and assign it to that residency. The admin can manage residents, schedules, and service requests only for its assigned residency.
-4. Admins can create user accounts and assign them to their residency. Each user sees schedules for their own residency and receives schedule SMS notifications when Twilio is configured.
-5. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
+3. Open **Subdivisions** and create subdivisions under the residency, such as Row House.
+4. Create an **Admin** account and assign both the residency and subdivision. The admin can manage residents and service requests only in that subdivision.
+5. Admins can create resident accounts; each resident is automatically assigned to the creating admin's subdivision. Superadmins can assign admins and residents to subdivisions from **Accounts**.
+6. Collection schedules are visible to all residents in a residency. Schedule SMS notices sent by an admin go only to residents assigned to that admin's subdivision; superadmin-published schedules notify residents throughout the selected residency. Service requests are submitted by residents and reviewed by admins within their assigned subdivision.
+7. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
 
 | Account type | Can do |
 | --- | --- |
-| **Superadmin** | System owner with access across all residencies, accounts, schedules, and service requests. |
-| **Admin** | Manage residents, schedules, and service requests in the admin's assigned residency. |
-| **User (resident)** | View their own residency's collection schedules, receive schedule notifications when SMS is enabled, and submit service requests. |
+| **Superadmin** | System owner with access across residencies, subdivisions, accounts, schedules, and service requests. |
+| **Admin** | Manage residents and requests in the admin's assigned subdivision; publish schedules visible throughout the assigned residency, with SMS notices limited to residents in the admin's subdivision. |
+| **User (resident)** | View schedules for their residency and receive admin SMS notices for their subdivision; submit service requests within their assigned subdivision. |
 
-Only admins and superadmins can create accounts. Admins can create users for their assigned residency; superadmins can create admins or users.
+Only admins and superadmins can create accounts. Admins create residents in their own subdivision. Superadmins can create admins, residents, or additional superadmins; superadmin accounts are not assigned to a residency or subdivision. From **Accounts**, superadmins can edit account names, view creation dates, change or reset passwords, lock or unlock accounts, and delete accounts. The signed-in account and the last superadmin account cannot be deleted.
+
+Existing accounts must be assigned a subdivision by a superadmin under **Accounts** before admins can manage their subdivision's residents and requests. If using `npm run seed:admin`, set both `ADMIN_RESIDENCY_ID` and `ADMIN_SUBDIVISION_ID` in `.env`; create the subdivision in the dashboard first.
 
 Accounts created by an admin or superadmin receive the temporary password `11111111`. On first login, the account holder must choose a new password before the dashboard or any protected features are available.
 
@@ -141,9 +145,23 @@ Creates the initial superadmin from the `SUPERADMIN_*` values in `.env`. It is n
 
 ## SMS notifications
 
-The main account, schedules, and request features work without SMS. To enable text delivery, set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` in `.env`, using credentials from your Twilio account. Restart the development server after changing `.env`.
+The main account, schedules, and request features work without SMS. To enable text messages through TextBee:
 
-Without valid Twilio settings, the app saves schedules and requests but displays that the SMS was not sent.
+1. Create a TextBee account and install the TextBee gateway app on an Android phone with a SIM that can send SMS. Register the phone in the [TextBee dashboard](https://app.textbee.dev/dashboard) and grant the app SMS permission. Keep the phone powered on and connected to the internet.
+2. In the dashboard's **API Keys** panel, generate an API key. The key is shown only once, so copy it somewhere safe.
+3. In the Devices panel, copy the registered phone's Device ID. This is optional if you set a default device in TextBee.
+4. Put the key and, optionally, the device ID in the root `.env` file:
+
+   ```dotenv
+   TEXTBEE_API_KEY=your_textbee_api_key
+   TEXTBEE_DEVICE_ID=your_textbee_device_id
+   ```
+
+5. Make sure resident phone numbers use international E.164 format (for example, `+639171234567`), then restart the development server.
+
+The backend sends messages through TextBee's REST API. A successful response means TextBee accepted the message into its sending queue; actual delivery depends on the Android phone being online and its SIM/carrier. Without a valid API key, schedules and requests are still saved, but the app reports that the SMS could not be queued. Keep the API key private and never put it in frontend code or commit it to source control.
+
+When an administrator approves a service request, the resident receives an SMS immediately with the approved collection date and estimated collection time (Philippines time), followed by a reminder SMS when that time arrives. Publishing a collection schedule also sends an immediate SMS to the residents in scope, followed by another SMS at its scheduled arrival time. Admin collection notices and reminders go only to residents in the admin's assigned subdivision; superadmin notices and reminders go to residents throughout the selected residency. Due reminders are retried if TextBee cannot queue them and remain scheduled across API restarts. The API server must stay running to process scheduled reminders. On startup, its logs confirm that the reminder workers have started; successful queueing and provider errors are also logged.
 
 ## Troubleshooting
 
@@ -186,10 +204,12 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | GET | `/api/auth/me` | Signed in | Get the current account. |
 | GET/POST | `/api/residencies` | Superadmin | List or create residencies. |
 | PATCH | `/api/residencies/:id` | Superadmin | Activate or deactivate a residency. |
+| GET | `/api/subdivisions` | Admin or superadmin | List subdivisions within the permitted residency scope. |
+| POST | `/api/subdivisions` | Superadmin | Create a subdivision in a residency. |
 | GET/POST | `/api/users` | Admin or superadmin | List or create accounts within the permitted scope. |
-| PATCH | `/api/users/:id` | Superadmin | Change an account's role or residency. |
+| PATCH | `/api/users/:id` | Superadmin | Assign an account's role, residency, and subdivision. |
 | GET | `/api/schedules` | Signed in | List schedules visible to the account. |
-| POST | `/api/schedules` | Admin or superadmin | Publish a schedule and notify that residency's residents. |
+| POST | `/api/schedules` | Admin or superadmin | Publish a residency-visible schedule; admin SMS goes to their subdivision, while superadmin SMS goes to the selected residency. |
 | POST | `/api/requests` | Resident | Submit a service request. |
 | GET | `/api/requests` | Admin or superadmin | List requests within the permitted scope. |
 | PATCH | `/api/requests/:id` | Admin or superadmin | Mark a request reviewed within the permitted scope. |

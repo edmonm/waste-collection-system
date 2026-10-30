@@ -13,7 +13,6 @@ export const config = {
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
-  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
-  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
-  twilioFromNumber: process.env.TWILIO_FROM_NUMBER
+  textbeeApiKey: process.env.TEXTBEE_API_KEY?.trim(),
+  textbeeDeviceId: process.env.TEXTBEE_DEVICE_ID?.trim()
 };

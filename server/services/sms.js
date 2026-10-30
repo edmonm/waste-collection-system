@@ -1,26 +1,27 @@
 import { config } from "../config.js";
 
 export function isSmsConfigured() {
-  return Boolean(config.twilioAccountSid && config.twilioAuthToken && config.twilioFromNumber);
+  return Boolean(config.textbeeApiKey);
 }
 
-export async function sendSms(to, body) {
+async function sendSmsBatch(recipients, message) {
   if (!isSmsConfigured()) {
     return { sent: false, reason: "SMS provider is not configured." };
   }
 
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.twilioAccountSid)}/Messages.json`;
-  const form = new URLSearchParams({ To: to, From: config.twilioFromNumber, Body: body });
-  const authorization = Buffer.from(`${config.twilioAccountSid}:${config.twilioAuthToken}`).toString("base64");
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetch("https://api.textbee.dev/api/v1/gateway/send-sms", {
       method: "POST",
       headers: {
-        Authorization: `Basic ${authorization}`,
-        "Content-Type": "application/x-www-form-urlencoded"
+        "x-api-key": config.textbeeApiKey,
+        "Content-Type": "application/json"
       },
-      body: form
+      body: JSON.stringify({
+        message,
+        recipients,
+        ...(config.textbeeDeviceId ? { deviceId: config.textbeeDeviceId } : {})
+      })
     });
   } catch (error) {
     console.error("Unable to reach the SMS provider:", error.message);
@@ -28,23 +29,25 @@ export async function sendSms(to, body) {
   }
 
   if (!response.ok) {
-    const detail = await response.text();
-    console.error(`SMS provider returned ${response.status}: ${detail}`);
-    return { sent: false, reason: "SMS provider rejected the message." };
+    console.error(`TextBee returned HTTP ${response.status}.`);
+    return { sent: false, reason: `TextBee rejected the message (HTTP ${response.status}).` };
   }
+
   return { sent: true };
 }
 
+export async function sendSms(to, message) {
+  return sendSmsBatch([to], message);
+}
+
 export async function broadcastSms(recipients, message) {
-  if (!isSmsConfigured()) {
-    return { sent: false, delivered: 0, reason: "SMS provider is not configured." };
+  if (!recipients.length) {
+    return { sent: false, queued: 0, reason: "There are no resident phone numbers to notify." };
   }
-  const results = await Promise.allSettled(recipients.map((recipient) => sendSms(recipient, message)));
-  const delivered = results.filter((result) => result.status === "fulfilled" && result.value.sent).length;
-  const failed = results.length - delivered;
+
+  const result = await sendSmsBatch(recipients, message);
   return {
-    sent: failed === 0 && delivered > 0,
-    delivered,
-    reason: failed ? `${failed} of ${results.length} SMS message(s) could not be delivered.` : delivered ? undefined : "There are no resident phone numbers to notify."
+    ...result,
+    queued: result.sent ? recipients.length : 0
   };
 }

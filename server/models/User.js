@@ -6,8 +6,10 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, required: true, trim: true },
   passwordHash: { type: String, required: true, select: false },
   mustChangePassword: { type: Boolean, default: false, required: true },
+  accountLocked: { type: Boolean, default: false, required: true },
   role: { type: String, enum: ["superadmin", "admin", "user", "resident"], default: "user", required: true },
-  residencyId: { type: mongoose.Schema.Types.ObjectId, ref: "Residency", default: null }
+  residencyId: { type: mongoose.Schema.Types.ObjectId, ref: "Residency", default: null },
+  subdivisionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subdivision", default: null }
 }, { timestamps: true });
 
 export const User = mongoose.model("User", userSchema);

@@ -19,8 +19,9 @@ export async function authenticate(request, response, next) {
     return response.status(403).json({ error: "Change your temporary password before continuing." });
   }
 
-  const user = await User.findById(payload.sub).select("name email phone role residencyId mustChangePassword");
+  const user = await User.findById(payload.sub).select("name email phone role residencyId subdivisionId mustChangePassword accountLocked");
   if (!user) return response.status(401).json({ error: "This account is no longer available." });
+  if (user.accountLocked) return response.status(403).json({ error: "This account is locked. Contact a superadmin for assistance." });
   if (user.mustChangePassword) {
     return response.status(403).json({ error: "Change your temporary password before continuing." });
   }

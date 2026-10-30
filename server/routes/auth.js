@@ -34,18 +34,22 @@ function publicUser(user) {
     phone: user.phone,
     role: user.role === "resident" ? "user" : user.role,
     residencyId: user.residencyId?._id?.toString() || user.residencyId?.toString() || null,
-    residencyName: user.residencyId?.name || null
+    residencyName: user.residencyId?.name || null,
+    subdivisionId: user.subdivisionId?._id?.toString() || user.subdivisionId?.toString() || null,
+    subdivisionName: user.subdivisionId?.name || null
   };
 }
 
 router.post("/login", async (request, response, next) => {
   try {
+  
     const input = loginSchema.parse(request.body);
     const user = await User.findOne({ email: input.email.toLowerCase() }).select("+passwordHash");
     const actualRole = user?.role === "resident" ? "user" : user?.role;
     if (!user || (input.loginAs && actualRole !== input.loginAs) || !(await bcrypt.compare(input.password, user.passwordHash))) {
       return response.status(401).json({ error: "Email or password is incorrect." });
     }
+    if (user.accountLocked) return response.status(403).json({ error: "This account is locked. Contact a superadmin for assistance." });
     if (actualRole !== "superadmin") {
       if (!user.residencyId) {
         return response.status(403).json({ error: "This account has no residency assigned. Ask a superadmin for help." });
@@ -53,7 +57,7 @@ router.post("/login", async (request, response, next) => {
       const residency = await Residency.findOne({ _id: user.residencyId, active: true });
       if (!residency) return response.status(403).json({ error: "This account's residency is inactive. Contact a superadmin." });
     }
-    await user.populate("residencyId", "name");
+    await user.populate(["residencyId", "subdivisionId"]);
     if (user.mustChangePassword) {
       return response.json({
         passwordChangeRequired: true,
@@ -86,12 +90,12 @@ router.post("/change-password", async (request, response, next) => {
 
     const { newPassword } = changePasswordSchema.parse(request.body);
     const user = await User.findOneAndUpdate(
-      { _id: payload.sub, mustChangePassword: true, role: { $in: ["admin", "user"] } },
+      { _id: payload.sub, mustChangePassword: true, accountLocked: { $ne: true }, role: { $in: ["superadmin", "admin", "user"] } },
       { passwordHash: await bcrypt.hash(newPassword, 12), mustChangePassword: false },
       { new: true, runValidators: true }
     );
     if (!user) return response.status(403).json({ error: "This account no longer requires a password change. Sign in again." });
-    await user.populate("residencyId", "name");
+    await user.populate(["residencyId", "subdivisionId"]);
     return response.json({ token: issueToken(user), user: publicUser(user) });
   } catch (error) {
     return next(error);
@@ -100,7 +104,7 @@ router.post("/change-password", async (request, response, next) => {
 
 router.get("/me", authenticate, async (request, response, next) => {
   try {
-    await request.user.populate("residencyId", "name");
+    await request.user.populate(["residencyId", "subdivisionId"]);
     return response.json({ user: publicUser(request.user) });
   } catch (error) {
     return next(error);
