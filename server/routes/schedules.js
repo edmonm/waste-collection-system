@@ -3,9 +3,10 @@ import mongoose from "mongoose";
 import { z } from "zod";
 import { authenticate, requireAnyRole } from "../middleware/auth.js";
 import { Schedule } from "../models/Schedule.js";
+import { Subdivision } from "../models/Subdivision.js";
 import { User } from "../models/User.js";
 import { broadcastSms } from "../services/sms.js";
-import { currentManilaDateKey, formatDateKey, formatTime24Hour } from "../utils/dateTime.js";
+import { currentManilaDateKey, formatDateKey, formatTime24Hour, manilaDateTime } from "../utils/dateTime.js";
 
 const router = Router();
 const scheduleSchema = z.object({
@@ -60,8 +61,43 @@ router.post("/", requireAnyRole("admin", "superadmin"), async (request, response
     const input = scheduleSchema.parse(request.body);
     const residencyId = request.user.role === "admin" ? request.user.residencyId : input.residencyId;
     if (!residencyId) return response.status(400).json({ error: "Select a residency for this schedule." });
-    const schedule = await Schedule.create({ ...input, residencyId, createdBy: request.user.id });
-    const residents = await User.find({ role: { $in: ["user", "resident"] }, residencyId }).select("phone").lean();
+    if (request.user.role === "admin" && !request.user.subdivisionId) {
+      return response.status(403).json({ error: "Your account needs a subdivision assignment before publishing collection notices." });
+    }
+    let area = input.area;
+    if (request.user.role === "admin") {
+      const subdivision = await Subdivision.findOne({
+        _id: request.user.subdivisionId,
+        residencyId
+      }).select("name");
+      if (!subdivision) {
+        return response.status(403).json({ error: "Your assigned subdivision is unavailable for collection publishing." });
+      }
+      if (input.area !== subdivision.name) {
+        return response.status(400).json({ error: "Choose your assigned subdivision as the collection area." });
+      }
+      area = subdivision.name;
+    }
+    const dateKey = new Date(input.date).toISOString().slice(0, 10);
+    const schedule = await Schedule.create({
+      ...input,
+      area,
+      date: new Date(`${dateKey}T00:00:00.000Z`),
+      scheduledAt: manilaDateTime(dateKey, input.estimatedArrivalTime),
+      scheduledSmsStatus: "pending",
+      scheduledSmsClaimedAt: null,
+      scheduledSmsNextAttemptAt: null,
+      scheduledSmsSentAt: null,
+      residencyId,
+      subdivisionId: request.user.role === "admin" ? request.user.subdivisionId : null,
+      createdBy: request.user.id
+    });
+    const recipientFilter = {
+      role: { $in: ["user", "resident"] },
+      residencyId
+    };
+    if (request.user.role === "admin") recipientFilter.subdivisionId = request.user.subdivisionId;
+    const residents = await User.find(recipientFilter).select("phone").lean();
     const notification = await broadcastSms(
       residents.map((resident) => resident.phone),
       `GreenLoop collection update: ${schedule.wasteType} in ${schedule.area} on ${formatDateKey(new Date(schedule.date).toISOString().slice(0, 10))}. Estimated arrival time: ${formatTime24Hour(schedule.estimatedArrivalTime)} Philippines time.`

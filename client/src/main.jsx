@@ -372,13 +372,17 @@ function ResidentCalendar({ schedules, requests }) {
   );
 }
 
-function ScheduleForm({ onSubmit, residencies = [], admin = false, residencyName = "" }) {
+function ScheduleForm({ onSubmit, residencies = [], subdivisions = [], admin = false, residencyName = "", assignedSubdivisionId = "" }) {
+  const assignedSubdivision = subdivisions.find((subdivision) => String(subdivision._id) === String(assignedSubdivisionId));
+  const availableSubdivisions = admin && assignedSubdivision ? [assignedSubdivision] : [];
   return (
     <form className="inline-form" onSubmit={onSubmit}>
       {admin
         ? <div className="schedule-residency-context"><span>Residency</span><strong>{residencyName || "Your assigned residency"}</strong></div>
         : <label>Residency<select name="residencyId" required defaultValue=""><option value="" disabled>Select residency</option>{residencies.map((residency) => <option key={residency._id} value={residency._id}>{residency.name}</option>)}</select></label>}
-      <label>Subdivision / collection area<input name="area" required maxLength="100" placeholder="e.g. Row House" /></label>
+      {admin
+        ? <label>Subdivision / collection area<select name="area" required defaultValue={assignedSubdivision?.name || ""}><option value="" disabled>{assignedSubdivision ? "Select subdivision" : "No assigned subdivision available"}</option>{availableSubdivisions.map((subdivision) => <option key={subdivision._id} value={subdivision.name}>{subdivision.name}</option>)}</select></label>
+        : <label>Subdivision / collection area<input name="area" required maxLength="100" placeholder="e.g. Row House" /></label>}
       <label>Collection date<input name="date" type="date" required /></label>
       <label>Estimated arrival time<input name="estimatedArrivalTime" type="time" required /></label>
       <label>Waste type<select name="wasteType" required><option value="General waste">General waste</option><option value="Recycling">Recycling</option><option value="Green waste">Green waste</option><option value="Bulk collection">Bulk collection</option></select></label>
@@ -427,7 +431,7 @@ function AccountForm({ onSubmit, admin, canCreateSuperadmin = false, residencies
   );
 }
 
-function ManagedAccountRow({ account, onView, onSettings, currentUserId }) {
+function ManagedAccountRow({ account, onView, onSettings, onDelete, currentUserId }) {
   const normalizedRole = account.role === "resident" ? "user" : account.role;
   const isCurrentUser = String(account._id) === String(currentUserId);
   return (
@@ -445,6 +449,9 @@ function ManagedAccountRow({ account, onView, onSettings, currentUserId }) {
           <button className="account-icon-button" type="button" aria-label={`Settings for ${account.name}`} title="Account settings" onClick={() => onSettings(account)}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Z" /><path d="m19.4 13.5 1.1.9-1.6 2.8-1.4-.5a7.8 7.8 0 0 1-1.6.9l-.2 1.5h-3.3l-.2-1.5a7.8 7.8 0 0 1-1.6-.9l-1.4.5-1.6-2.8 1.1-.9a7.6 7.6 0 0 1 0-1.8l-1.1-.9 1.6-2.8 1.4.5a7.8 7.8 0 0 1 1.6-.9l.2-1.5h3.3l.2 1.5a7.8 7.8 0 0 1 1.6.9l1.4-.5 1.6 2.8-1.1.9a7.6 7.6 0 0 1 0 1.8Z" /></svg>
           </button>
+          {!isCurrentUser && <button className="account-icon-button account-delete-button" type="button" aria-label={`Delete ${account.name}`} title="Delete account" onClick={() => onDelete(account)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="m6 7 1 14h10l1-14M9 7V4h6v3" /></svg>
+          </button>}
         </div>
       </td>
     </tr>
@@ -1059,6 +1066,24 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
     }
   }
 
+  async function deleteManagedAccount(account) {
+    const roleLabel = account.role === "user" || account.role === "resident" ? "resident" : account.role;
+    const warning = roleLabel === "resident"
+      ? `Delete resident account for ${account.name}? Their service request history will also be deleted. This cannot be undone.`
+      : `Delete ${roleLabel} account for ${account.name}? This cannot be undone.`;
+    if (!window.confirm(warning)) return;
+    setNotice(null);
+    try {
+      const result = await api(`/users/${encodeURIComponent(account._id)}`, { method: "DELETE" }, token);
+      await refreshDashboard();
+      setSelectedAccount((selected) => selected?._id === account._id ? null : selected);
+      setSelectedSettingsAccount((selected) => selected?._id === account._id ? null : selected);
+      setNotice({ message: result.message });
+    } catch (error) {
+      setNotice({ message: error.message, isError: true });
+    }
+  }
+
   async function toggleResidency(residency) {
     try {
       await api(`/residencies/${encodeURIComponent(residency._id)}`, {
@@ -1252,7 +1277,7 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <div className="accounts-table-scroll">
                     <table className="accounts-table">
                       <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Residency</th><th>Subdivision</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
-                      <tbody>{filteredAccounts.map((account) => <ManagedAccountRow key={account._id} account={account} onView={setSelectedAccount} onSettings={setSelectedSettingsAccount} currentUserId={user.id} />)}</tbody>
+                      <tbody>{filteredAccounts.map((account) => <ManagedAccountRow key={account._id} account={account} onView={setSelectedAccount} onSettings={setSelectedSettingsAccount} onDelete={deleteManagedAccount} currentUserId={user.id} />)}</tbody>
                     </table>
                   </div>
                 ) : <div className="empty-state"><p>{users.length ? "No accounts match your search." : "No accounts yet. Create an account to get started."}</p></div>}
@@ -1327,7 +1352,7 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <div className="collection-management-layout">
                 <section className="collection-create-column">
                   <div className="eyebrow">CREATE COLLECTION</div>
-                  <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} />
+                  <ScheduleForm onSubmit={submitSchedule} admin residencyName={user.residencyName} subdivisions={subdivisions} assignedSubdivisionId={user.subdivisionId} />
                 </section>
                 <section className="collection-list-column">
                   <div className="panel-heading"><div><div className="eyebrow">PUBLISHED COLLECTIONS</div><h3>Collection list</h3></div><span className="count-badge">{schedules.length}</span></div>

@@ -104,7 +104,7 @@ After the app is running:
 3. Open **Subdivisions** and create subdivisions under the residency, such as Row House.
 4. Create an **Admin** account and assign both the residency and subdivision. The admin can manage residents and service requests only in that subdivision.
 5. Admins can create resident accounts; each resident is automatically assigned to the creating admin's subdivision. Superadmins can assign admins and residents to subdivisions from **Accounts**.
-6. Collection schedules and SMS notices are shared with all residents in a residency. Service requests are submitted by residents and reviewed by admins within their assigned subdivision.
+6. Collection schedules are visible to all residents in a residency. Schedule SMS notices sent by an admin go only to residents assigned to that admin's subdivision; superadmin-published schedules notify residents throughout the selected residency. Service requests are submitted by residents and reviewed by admins within their assigned subdivision.
 7. Login identifies the account type from the email address. Admin and superadmin accounts must use the email and password created for them.
 
 There are three account types:
@@ -112,10 +112,10 @@ There are three account types:
 | Account type | Can do |
 | --- | --- |
 | **Superadmin** | System owner with access across residencies, subdivisions, accounts, schedules, and service requests. |
-| **Admin** | Manage residents and requests in the admin's assigned subdivision; publish schedules visible throughout the assigned residency. |
-| **User (resident)** | View schedules and receive notifications for their residency; submit service requests within their assigned subdivision. |
+| **Admin** | Manage residents and requests in the admin's assigned subdivision; publish schedules visible throughout the assigned residency, with SMS notices limited to residents in the admin's subdivision. |
+| **User (resident)** | View schedules for their residency and receive admin SMS notices for their subdivision; submit service requests within their assigned subdivision. |
 
-Only admins and superadmins can create accounts. Admins create residents in their own subdivision. Superadmins can create admins, residents, or additional superadmins; superadmin accounts are not assigned to a residency or subdivision. From **Accounts**, superadmins can edit account names, view creation dates, change or reset passwords, and lock or unlock accounts.
+Only admins and superadmins can create accounts. Admins create residents in their own subdivision. Superadmins can create admins, residents, or additional superadmins; superadmin accounts are not assigned to a residency or subdivision. From **Accounts**, superadmins can edit account names, view creation dates, change or reset passwords, lock or unlock accounts, and delete accounts. The signed-in account and the last superadmin account cannot be deleted.
 
 Existing accounts must be assigned a subdivision by a superadmin under **Accounts** before admins can manage their subdivision's residents and requests. If using `npm run seed:admin`, set both `ADMIN_RESIDENCY_ID` and `ADMIN_SUBDIVISION_ID` in `.env`; create the subdivision in the dashboard first.
 
@@ -161,7 +161,7 @@ The main account, schedules, and request features work without SMS. To enable te
 
 The backend sends messages through TextBee's REST API. A successful response means TextBee accepted the message into its sending queue; actual delivery depends on the Android phone being online and its SIM/carrier. Without a valid API key, schedules and requests are still saved, but the app reports that the SMS could not be queued. Keep the API key private and never put it in frontend code or commit it to source control.
 
-When an administrator approves a service request, the resident receives an SMS immediately with the approved collection date and estimated collection time (Philippines time). GreenLoop also queues a reminder SMS for that time; due reminders are retried if TextBee cannot queue them and remain scheduled across API restarts. The API server must stay running to process scheduled reminders. On startup, its logs confirm that the reminder worker has started; successful queueing and provider errors are also logged.
+When an administrator approves a service request, the resident receives an SMS immediately with the approved collection date and estimated collection time (Philippines time), followed by a reminder SMS when that time arrives. Publishing a collection schedule also sends an immediate SMS to the residents in scope, followed by another SMS at its scheduled arrival time. Admin collection notices and reminders go only to residents in the admin's assigned subdivision; superadmin notices and reminders go to residents throughout the selected residency. Due reminders are retried if TextBee cannot queue them and remain scheduled across API restarts. The API server must stay running to process scheduled reminders. On startup, its logs confirm that the reminder workers have started; successful queueing and provider errors are also logged.
 
 ## Troubleshooting
 
@@ -209,7 +209,7 @@ The JSON API is available under `http://localhost:3000/api`. Protected routes re
 | GET/POST | `/api/users` | Admin or superadmin | List or create accounts within the permitted scope. |
 | PATCH | `/api/users/:id` | Superadmin | Assign an account's role, residency, and subdivision. |
 | GET | `/api/schedules` | Signed in | List schedules visible to the account. |
-| POST | `/api/schedules` | Admin or superadmin | Publish a schedule and notify that residency's residents. |
+| POST | `/api/schedules` | Admin or superadmin | Publish a residency-visible schedule; admin SMS goes to their subdivision, while superadmin SMS goes to the selected residency. |
 | POST | `/api/requests` | Resident | Submit a service request. |
 | GET | `/api/requests` | Admin or superadmin | List requests within the permitted scope. |
 | PATCH | `/api/requests/:id` | Admin or superadmin | Mark a request reviewed within the permitted scope. |

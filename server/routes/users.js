@@ -252,13 +252,25 @@ router.delete("/:id", async (request, response, next) => {
     if (!mongoose.isValidObjectId(request.params.id)) {
       return response.status(400).json({ error: "Invalid account identifier." });
     }
+    const targetId = new mongoose.Types.ObjectId(request.params.id);
+    if (request.user.role === "superadmin" && request.user._id.equals(targetId)) {
+      return response.status(400).json({ error: "You cannot delete the account currently signed in." });
+    }
     const filter = request.user.role === "superadmin"
-      ? { _id: request.params.id, role: { $in: ["user", "resident"] } }
-      : { _id: request.params.id, role: { $in: ["user", "resident"] }, residencyId: request.user.residencyId, subdivisionId: request.user.subdivisionId };
+      ? { _id: targetId }
+      : { _id: targetId, role: { $in: ["user", "resident"] }, residencyId: request.user.residencyId, subdivisionId: request.user.subdivisionId };
+    const target = await User.findOne(filter).select("role");
+    if (!target) return response.status(404).json({ error: "Account not found." });
+    if (request.user.role === "superadmin" && target.role === "superadmin") {
+      const superadminCount = await User.countDocuments({ role: "superadmin" });
+      if (superadminCount <= 1) {
+        return response.status(409).json({ error: "The last superadmin account cannot be deleted." });
+      }
+    }
     const user = await User.findOneAndDelete(filter);
-    if (!user) return response.status(404).json({ error: "Resident account not found." });
+    if (!user) return response.status(404).json({ error: "Account not found." });
     await ServiceRequest.deleteMany({ resident: user._id });
-    return response.json({ message: "Resident account and its service requests deleted." });
+    return response.json({ message: "Account and associated service requests deleted." });
   } catch (error) {
     return next(error);
   }
